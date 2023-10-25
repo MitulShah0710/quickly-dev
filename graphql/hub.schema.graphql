@@ -1,0 +1,55 @@
+schema {
+    query: Query
+    mutation: Mutation
+}
+
+type Query {
+    getHubs(limit: Int, offset: Int): HubConnection
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser"  ])
+
+    getHub(hubId: String!): Hub
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+}
+
+type Mutation {
+    createHub(info: HubInput): Hub!
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+
+    updateHub(hubId: String!, info: HubUpdateInput): Hub!
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+
+    deleteHub(hubId: String!): Boolean!
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+}
+
+input HubInput {
+    name: String!
+    address: String!
+    latLongs: locationLatLongs
+}
+
+input HubUpdateInput {
+    name: String
+    address: String
+    latLongs: locationLatLongs
+}
+
+type Hub {
+    TenantID: String!
+    ID: ID!
+    name: String
+    address: String
+    createdAt: String
+    createdBy: String
+    updatedAt: String
+    updatedBy: String
+    Teams: [ Team ]
+    latLongs: LatLongs
+}
+
+type HubConnection {
+    hubs: [Hub]
+    total: Int
+    page: Int
+    count: Int
+}

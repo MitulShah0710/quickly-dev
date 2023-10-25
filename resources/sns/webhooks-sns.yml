@@ -1,0 +1,6 @@
+Type: AWS::SNS::Topic
+Properties:
+  TopicName: Webhooks-${opt:stage}
+  Subscription:
+    - Protocol: sqs
+      Endpoint: !GetAtt WaReceiveMessageSqs.Arn

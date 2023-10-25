@@ -1,0 +1,16 @@
+{
+    "version" : "2017-02-28",
+    "operation" : "UpdateItem",
+    "key" : {
+        "id" : $util.dynamodb.toDynamoDBJson($ctx.args.TenantID)
+    },
+    "update" : {
+        "expression" : "SET #ON_HOLD = :ON_HOLD",
+        "expressionNames" : {
+            "#ON_HOLD" : "ON_HOLD"
+        },
+        "expressionValues" : {
+            ":ON_HOLD" : $util.dynamodb.toDynamoDBJson($ctx.args.holdFlag)
+        }
+    }
+}

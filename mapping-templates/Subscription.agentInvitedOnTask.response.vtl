@@ -1,0 +1,15 @@
+$extensions.setSubscriptionFilter({
+    "filterGroup": [
+        {
+           "filters" : [
+                {
+                    "fieldName" : "agentID",
+                    "operator" : "contains",
+                    "value" : $ctx.args.agentID
+                }
+           ]
+           
+        }
+    ]
+})
+$util.toJson($context.result)

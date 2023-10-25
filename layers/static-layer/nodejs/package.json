@@ -1,0 +1,32 @@
+{
+  "name": "nodejs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-api-gateway": "^3.159.0",
+    "@aws-sdk/client-lambda": "^3.199.0",
+    "@googlemaps/google-maps-services-js": "^3.3.16",
+    "aws-appsync": "^4.1.5",
+    "aws-sdk": "^2.1105.0",
+    "axios": "^0.27.2",
+    "graphql-tag": "^2.12.6",
+    "lodash": "^4.17.21",
+    "middy": "^0.36.0",
+    "moment": "^2.29.1",
+    "node-fetch": "^2.6.7",
+    "object-hash": "^3.0.0",
+    "pg": "^8.7.3",
+    "pg-hstore": "^2.3.4",
+    "redux": "^4.2.0",
+    "sequelize": "^6.17.0",
+    "sequelize-cli": "^6.4.1",
+    "serverless-appsync-plugin": "^1.13.0"
+  }
+}

@@ -1,0 +1,14 @@
+Type: AWS::DynamoDB::Table
+Properties:
+  BillingMode: PAY_PER_REQUEST
+  KeySchema:
+    - AttributeName: year
+      KeyType: HASH
+    - AttributeName: eventTime
+      KeyType: RANGE
+  AttributeDefinitions:
+    - AttributeName: year
+      AttributeType: S
+    - AttributeName: eventTime
+      AttributeType: S
+    

@@ -1,0 +1,27 @@
+{
+  "name": "wa",
+  "version": "1.0.0",
+  "description": "Whatsapp Cloud API wrapper based on whatsappcloudapi_wrapper by Daggie Blanqx",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cehh/whatsappcloudapi_wrapper.git"
+  },
+  "keywords": [
+    "whatsapp"
+  ],
+  "author": "Carlos Hernandez",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cehh/whatsappcloudapi_wrapper/issues"
+  },
+  "homepage": "https://github.com/cehh/whatsappcloudapi_wrapper#readme",
+  "dependencies": {
+    "signale": "^1.4.0",
+    "unirest": "^0.6.0"
+  }
+}

@@ -1,0 +1,73 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "TaskInputModel",
+    "type": "object",
+    "properties": {
+      "tasks": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/Task"
+        }
+      }
+    },
+    "definitions": {
+      "Task" : {
+        "type": "object",
+        "properties": {
+            "customerLocationId": { "type": "string" },
+            "pickupLocationId": { "type": "string" },
+            "customerAddress": { "type": "string" },
+            "customerEmail": { "type": "string" },
+            "customerLatLongs": {
+                "type": "object",
+                "properties": {
+                    "lat": { "type": "number" },
+                    "long": { "type": "number" }
+                }
+            },
+            "customerName": { "type": "string" },
+            "customerPhone": { "type": "string" },
+            "pickupAddress": { "type": "string" },
+            "pickupEmail": { "type": "string" },
+            "pickupLatLongs": {
+                "type": "object",
+                "properties": {
+                    "lat": { "type": "number" },
+                    "long": { "type": "number" }
+                }
+            },
+            "pickupName": { "type": "string" },
+            "pickupPhone": { "type": "string" },
+            "priority": {
+                "type": "string",
+                "enum": ["LOW", "MEDIUM", "HIGH"]
+            },
+            "taskDescription": { "type": "string" },
+            "taskMode": {
+                "type": "string",
+                "enum": ["IMMEDIATE", "SAME_DAY", "NEXT_DAY", "APPOINTED"]
+            },
+            "value": { "type": "number" },
+            "weight": { "type": "number" },
+            "taskDetails": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "qty": { "type": "integer" },
+                        "item": { "type": "string" },
+                        "code": { "type": "string" }
+                    }
+                }
+            },
+            "additionalInfo": { "type": "string" },
+            "TeamID": { "type": "string" },
+            "requestedDate": { "type": "string" },
+            "TaskTypeID": { "type": "string" },
+            "orderID": { "type": "string" },
+            "orderPlacedOn": { "type": "string" },
+            "allowEdit": { "type": "boolean" }
+        }
+      }
+    }
+  }

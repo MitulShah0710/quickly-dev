@@ -1,0 +1,39 @@
+schema {
+    query: Query
+    mutation: Mutation
+}
+type Query {
+    getCustomFilters: CustomFilterConnection
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])  
+    getCustomFilter(filterId: String): CustomFilter    
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+    getCustomFilterExecutedQuery(filterId: String): CustomFilter    
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser", "TenantDriver" ])
+}
+ type Mutation {
+   createCustomFilter(input: CustomFilterInput): String
+   @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+   deleteCustomFilter( filterId: String!): String
+   @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+   updateCustomFilter(input: CustomFilterInput): String
+   @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+ }
+type CustomFilterConnection {
+    items: [CustomFilter] 
+    total: Int
+    page: Int
+    count: Int
+}
+type CustomFilter{
+    filterId:ID!
+    userId: String
+    filterName: String
+    createdAt: String
+    filterContent:String
+}
+input CustomFilterInput {
+    filterName: String
+    createdAt: String
+    filterContent:String
+    filterId:ID!
+}

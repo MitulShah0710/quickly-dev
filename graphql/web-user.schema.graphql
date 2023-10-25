@@ -1,0 +1,68 @@
+schema {
+    query: Query
+    mutation: Mutation
+}
+
+type Query {
+    getWebUsers( type: WebUserTypes, limit: Int!, offset: Int! ): WebUserConnection
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin"])
+
+    getSelfWebUserProfile: WebUser!
+    @aws_cognito_user_pools(cognito_groups: ["TenantWebUser", "TenantAdmin"])
+}
+
+
+type Mutation {
+    createWebUser(info: WebUserInput): WebUser
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin"])
+
+    updateWebUser( userID: String!, info: WebUserUpdateRequest! ): WebUser
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin"])
+}
+
+input WebUserInput {
+    email: String!
+    firstName: String!
+    lastName: String!
+    userType: WebUserTypes!
+    TeamID: [String] 
+}
+
+input WebUserUpdateRequest {
+    firstName: String
+    lastName: String
+    status: WebUserStatus
+    TeamID: [String]
+}
+
+type WebUser {
+    ID: ID!
+    email: String!
+    firstName: String!
+    lastName: String!
+    userType: WebUserTypes
+    status: WebUserStatus
+    isVerified: Boolean
+    Teams: [Team]
+    createdAt: String
+    createdBy: String
+    updatedAt: String
+    updatedBy: String
+}
+
+enum WebUserTypes {
+    TENANT_ADMIN
+    DISPATCHER
+}
+
+enum WebUserStatus {
+    ACTIVE
+    INACTIVE
+}
+
+type WebUserConnection {
+    webUsers: [WebUser]
+    total: Int
+    page: Int
+    count: Int
+}

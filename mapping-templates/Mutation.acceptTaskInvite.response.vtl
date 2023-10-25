@@ -1,0 +1,7 @@
+#set($errorObj = {})
+#if( $ctx.result.Error && $ctx.result.Error == "LIMIT_EXCEED")
+	$util.qr($errorObj.put('limit', $ctx.result.limit))
+    $util.error("TASK_LIMIT_EXCEED", "", {}, $errorObj)
+#else
+	$util.toJson($ctx.result)
+#end

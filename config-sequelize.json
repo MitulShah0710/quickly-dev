@@ -1,0 +1,20 @@
+{
+    "aglocal": {
+        "username": "quickly",
+        "password": "quickC2d54p8",
+        "database": "postgres",
+        "schema": "aglocal",
+        "host": "localhost",
+        "dialect": "postgres",
+        "port": "5432"
+    },
+    "qa": {
+        "username": "quickly",
+        "password": "quickC2d54p8",
+        "database": "postgres",
+        "schema": "qa",
+        "host": "localhost",
+        "dialect": "postgres",
+        "port": "5435"
+    }
+}

@@ -1,0 +1,14 @@
+#set( $tenant_HASH = $context.stash.tenant_HASH)
+#set( $requester = $context.stash.requester )
+$util.quiet($context.arguments.put("newStatus", "PENDING_ACCEPTANCE"))
+
+{
+    "version": "2017-02-28",
+    "operation": "Invoke",
+    "payload": {
+        "field": "updateTaskStatusByUser",
+        "arguments":  $utils.toJson($context.arguments),
+        "tenantHash": $utils.toJson($tenant_HASH),
+        "requesterUser": $util.toJson($requester)
+    }
+}

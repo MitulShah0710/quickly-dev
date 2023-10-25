@@ -1,0 +1,56 @@
+Type: AWS::IAM::Role
+Properties:
+  RoleName: !Join ["-",[!Ref AWS::StackName, "IdentityPool-UnAuthRole"]]
+  AssumeRolePolicyDocument:
+    Version: "2012-10-17"
+    Statement:
+      - Effect: Allow
+        Principal:
+          Federated:
+            - cognito-identity.amazonaws.com
+        Action:
+          - sts:AssumeRoleWithWebIdentity
+        Condition:
+          "StringEquals":
+            "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+          "ForAnyValue:StringLike":
+            "cognito-identity.amazonaws.com:amr": "unauthenticated"
+  Policies:
+    - PolicyName: !Join ["-", [ "IdentityPool", { Ref: AWS::StackName }, "UnAuth", "Policy"]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - "mobileanalytics:PutEvents"
+              - "cognito-sync:*"
+            Resource:
+              - "*"
+    - PolicyName: !Join ["-", [ "S3DataBucketPut", { Ref: AWS::StackName }, "UnAuth", "Policy"]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - "s3:PutObject"
+            Resource:
+              - !Join ['', [!GetAtt S3DataBucket.Arn, '/public/*']]
+    - PolicyName: !Join ["-", [ "S3DataBucketList", { Ref: AWS::StackName }, "UnAuth", "Policy"]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - "s3:ListBucket"
+            Resource:
+              - !GetAtt S3DataBucket.Arn
+    - PolicyName: !Join ["-", [ "S3DataBucketGet", { Ref: AWS::StackName }, "UnAuth", "Policy"]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - "s3:GetObject"
+            Resource:
+              - !Join ['', [!GetAtt S3DataBucket.Arn, '/public/*']]
+    

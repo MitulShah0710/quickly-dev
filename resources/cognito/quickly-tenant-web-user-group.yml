@@ -1,0 +1,5 @@
+Type: AWS::Cognito::UserPoolGroup
+Properties: 
+  Description: Quickly Super Admins, to manage quickly
+  GroupName: TenantWebUser
+  UserPoolId: !Ref CognitoUserPool

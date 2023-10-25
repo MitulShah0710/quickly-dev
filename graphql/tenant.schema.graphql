@@ -1,0 +1,110 @@
+schema {
+    query: Query
+    mutation: Mutation
+}
+
+type Query {
+    getTenantInfo: Tenant
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin"])
+
+    # getConnections: TenantConnectionWrapper
+    # @aws_cognito_user_pools(cognito_groups: ["TenantAdmin"])
+}
+
+type TenantConnectionWrapper {
+    sent: [TenantConnection]
+    received: [TenantConnection]
+}
+
+type Mutation {
+    # createConnection( email: String! ): TenantConnection!
+    # @aws_cognito_user_pools(cognito_groups: ["TenantAdmin"])
+
+    # updateConnection( requestID: String!, newStatus: TenantConnectionStatus!): TenantConnection
+    # @aws_cognito_user_pools(cognito_groups: ["TenantAdmin"])
+
+    # deleteConnection( requestID: String! ): Boolean
+    # @aws_cognito_user_pools(cognito_groups: ["TenantAdmin"])
+
+    # updateTenant(tenantID: String!, info: TenantUpdateInput)
+    # @aws_cognito_user_pools(cognito_groups: ["SuperAdmin"])
+
+    updateTenantInfo(updateInfo: TenantUpdateInfo!): Tenant
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin"])
+
+    putTenantOnHold(TenantID: String!, holdFlag: Boolean! ): TenantAccount!
+    @aws_cognito_user_pools(cognito_groups: ["SuperAdmin"])
+}
+
+input TenantUpdateInput {
+    on_hold: Boolean
+}
+
+input TenantUpdateInfo {
+    configs: ConfigInput
+}
+
+input ConfigInput {
+    driving_times: [Float]
+    waiting_time_between_invites: Float
+    max_tasks_per_agent: Int
+}
+
+type Tenant {
+    ID: ID!,
+    name: String,
+    tenantAdminName: String,
+    tenantAdminEmail: String,
+    status: TenantStatus,
+    logoURL: String
+    websiteURL: String
+    quicklyNetworkEnabled: Boolean
+    createdAt: String
+    updatedAt: String
+    createdBy: String
+    updatedBy: String
+    ON_HOLD: Boolean
+    configs: Configs
+    country: String
+    phone: String
+    address: String
+    zipCode: String
+    typeOfBusiness: Int
+    averageDrivers: Int
+    averageMonthlyOrders: Int
+    apiKeyId: String
+    apiKeyValue: String
+}
+
+type Configs {
+    driving_times: [Float]
+    waiting_time_between_invites: Float
+    max_tasks_per_agent: Int
+}
+
+type TenantConnection {
+    ID: ID!
+    sourceTenantID: ID
+    destTenantID: ID
+    status: TenantConnectionStatus
+    name: String
+    tenantAdminName: String
+    tenantAdminEmail: String
+    createdAt: String
+    updatedAt: String
+    createdBy: String
+    updatedBy: String
+}
+
+# input TenantConnection
+
+enum TenantConnectionStatus {
+    INIT
+    APPROVED
+    REJECTED
+}
+
+enum TenantStatus {
+    ACTIVE
+    INACTIVE
+}

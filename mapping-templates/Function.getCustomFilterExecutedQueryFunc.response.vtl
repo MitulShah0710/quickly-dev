@@ -1,0 +1,3 @@
+## an id is required so let's add a unique random identifier to the output
+$util.qr($ctx.result.put("id", $util.autoId()))
+$util.toJson($ctx.result)

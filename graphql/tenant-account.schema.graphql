@@ -1,0 +1,68 @@
+type Mutation {
+	createTenantAccount(info: TenantAccountCreateInput): TenantAccount
+		@aws_api_key
+	updateTenantAccountStatus(id: String!, newStatus: TenantAccountStatus): TenantAccount!
+		@aws_cognito_user_pools(cognito_groups: ["SuperAdmin"])
+}
+
+type Query {
+	getTenantAccountsByStatus( status: TenantAccountStatus, limit: Int, nextToken: String ): TenantAccountConnection
+		@aws_cognito_user_pools(cognito_groups: ["SuperAdmin"])
+}
+
+type TenantAccount @aws_api_key
+@aws_cognito_user_pools {
+	id: ID!
+	businessName: String
+	# typeOfBusiness: Int #removed property
+	contactFirstName: String
+	contactLastName: String
+	contactEmail: String  #property previously known as adminEmail
+	averageDrivers: Int
+	averageMonthlyOrders: Int
+	country: String
+	address: String
+	zipCode: String
+	status: TenantAccountStatus
+	ON_HOLD: Boolean
+	phone: String
+}
+
+type TenantAccountConnection {
+	TenantAccount: [TenantAccount]
+	nextToken: String
+	count: Int
+}
+
+input TenantAccountCreateInput {
+	businessName: String
+	typeOfBusiness: Int
+	contactFirstName: String
+	contactLastName: String
+	contactEmail: String
+	averageDrivers: Int
+	averageMonthlyOrders: Int
+	country: String
+	zipCode: String
+	address: String
+	phone: String
+}
+
+enum TenantAccountStatus {
+	INIT_EMAIL_VALIDATION
+	PENDING_EMAIL_VALIDATION
+	INIT_QUIK_VALIDATION
+	INIT_READY_WORK
+	REJECTED
+}
+
+type Subscription {
+	tenantAccountUpdates: TenantAccount
+	@aws_subscribe(mutations: ["createTenantAccount", "updateTenantAccountStatus"])
+}
+
+schema {
+	query: Query
+	mutation: Mutation
+	subscription: Subscription
+}

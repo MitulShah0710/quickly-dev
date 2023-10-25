@@ -1,0 +1,7 @@
+Type: AWS::ApiGatewayV2::Route
+Properties:
+  ApiId: !Ref HttpApi
+  AuthorizationType: JWT
+  AuthorizerId: !Ref HttpApiAuthorizer
+  RouteKey: POST /
+  Target: !Sub "integrations/${HttpApiIntegration}"

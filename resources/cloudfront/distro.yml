@@ -1,0 +1,36 @@
+Type: "AWS::CloudFront::Distribution"
+Properties:
+  DistributionConfig:
+    CustomErrorResponses:
+      - ErrorCode: 403 # not found
+        ResponseCode: 404
+        ResponsePagePath: "/index.html"
+    DefaultCacheBehavior:
+      AllowedMethods:
+        - GET
+        - HEAD
+        - OPTIONS
+      CachedMethods:
+        - GET
+        - HEAD
+        - OPTIONS
+      Compress: true
+      DefaultTTL: 3600 # in seconds
+      ForwardedValues:
+        Cookies:
+          Forward: none
+        QueryString: false
+      MaxTTL: 86400 # in seconds
+      MinTTL: 60 # in seconds
+      TargetOriginId: s3origin
+      ViewerProtocolPolicy: "redirect-to-https"
+    DefaultRootObject: "index.html"
+    Enabled: true
+    HttpVersion: http2
+    Origins:
+      - DomainName: !GetAtt "OriginS3Bucket.DomainName"
+        Id: s3origin
+        S3OriginConfig:
+          OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+    PriceClass: "PriceClass_All"
+    

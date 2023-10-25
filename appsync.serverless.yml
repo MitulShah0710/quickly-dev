@@ -1,0 +1,904 @@
+name: quickly-appsync-be-${opt:stage}
+schema:
+  - graphql/tenant-account.schema.graphql
+  - graphql/tenant.schema.graphql
+  - graphql/team.schema.graphql
+  - graphql/hub.schema.graphql
+  - graphql/web-user.schema.graphql
+  - graphql/agent.schema.graphql
+  - graphql/task.schema.graphql
+  - graphql/custom-filter.schema.graphql
+  - graphql/location.schema.graphql
+  - graphql/route.schema.graphql
+authenticationType: AMAZON_COGNITO_USER_POOLS
+xrayEnabled: true
+userPoolConfig:
+  awsRegion: "${self:provider.region}"
+  defaultAction: ALLOW
+  userPoolId: !Ref CognitoUserPool
+logConfig:
+  loggingRoleArn: { Fn::GetAtt: [AppSyncLoggingServiceRole, Arn] }
+  level: ALL
+  excludeVerboseContent: false
+
+additionalAuthenticationProviders:
+  - authenticationType: API_KEY
+
+# apiKeys:
+#   - name: Default # default API key. Use this name if you already have an auto-generated API key
+#     description: Default api key
+#     expires: 1y # 1 year timelife
+
+mappingTemplates:
+  - dataSource: Lambda_updateTenantInfo
+    type: Mutation
+    field: updateTenantInfo
+
+  - dataSource: Lambda_updateEndpoint
+    type: Mutation
+    field: updateEndpoint
+
+  - dataSource: Lambda_updateAgentLocations
+    type: Mutation
+    field: updateAgentLocation
+
+  - dataSource: Lambda_getTaskStatus
+    type: Query
+    field: getTaskStatus
+
+  - dataSource: Lambda_getTenantAgents
+    type: Query
+    field: getTenantAgents
+
+  - dataSource: Lambda_createTaskTenantInvite
+    type: Mutation
+    field: createTaskTenantInvite
+
+  - dataSource: none
+    type: Subscription
+    field: agentInvitedOnTask
+
+  - dataSource: Lambda_rejectTaskInvite
+    type: Mutation
+    field: rejectTaskInvite
+
+  - dataSource: Lambda_getInvitesByAgent
+    type: Query
+    field: getInvitesByAgent
+
+  # - dataSource: Lambda_createTaskInvite
+  #   type: Mutation
+  #   field: createTaskInvite
+
+  - dataSource: Lambda_acceptTaskInvite
+    type: Mutation
+    field: acceptTaskInvite
+
+  - dataSource: Lambda_deleteTaskStatusMessage
+    type: Mutation
+    field: deleteTaskStatusMessage
+
+  - dataSource: Lambda_updateTaskStatusMessage
+    type: Mutation
+    field: updateTaskStatusMessage
+
+  - dataSource: Lambda_deleteTaskType
+    type: Mutation
+    field: deleteTaskType
+
+  - dataSource: Lambda_getTaskStatusMessage
+    type: Query
+    field: getTaskStatusMessages
+
+  - dataSource: Lambda_createTaskStatusMessage
+    type: Mutation
+    field: createTaskStatusMessage
+
+  - dataSource: Lambda_getTaskType
+    type: Query
+    field: getTaskTypes
+
+  - dataSource: Lambda_updateTaskType
+    type: Mutation
+    field: updateTaskType
+
+  - dataSource: Lambda_createTaskType
+    type: Mutation
+    field: createTaskType
+
+  - dataSource: Lambda_updateTask
+    type: Mutation
+    field: updateTask
+
+  - dataSource: Lambda_getTasksByTeam
+    type: Query
+    field: getTasksByTeam
+
+  - dataSource: Lambda_getSelfWebUserProfile
+    type: Query
+    field: getSelfWebUserProfile
+
+  - dataSource: Lambda_getTaskHistory
+    type: Query
+    field: getTaskHistory
+
+  - dataSource: Lambda_getSelfAgentProfile
+    type: Query
+    field: getSelfAgentProfile
+
+  - dataSource: Lambda_getAgentsByTeamAndStatus
+    type: Query
+    field: getAgentsByTeamAndStatus
+
+  - dataSource: Lambda_updateOwnWorkStatus
+    type: Mutation
+    field: updateOwnWorkStatus
+
+  - dataSource: Lambda_createTask
+    type: Mutation
+    field: createTask
+
+  - dataSource: Lambda_createTaskBulk
+    type: Mutation
+    field: createTaskBulk
+
+  - dataSource: Lambda_getTasks
+    type: Query
+    field: getTasks
+
+  - dataSource: Lambda_getAgentsTasks
+    type: Query
+    field: getAgentsTasks
+
+  - dataSource: Lambda_getCustomData
+    type: Query
+    field: getCustomData
+
+  - dataSource: Lambda_assignTeamToTask
+    type: Mutation
+    field: assignTeamToTask
+
+  - dataSource: Lambda_assignAgentToTask
+    type: Mutation
+    field: assignAgentToTask
+
+  - dataSource: Lambda_updateTaskStatusByAgent
+    type: Mutation
+    field: updateTaskStatusByAgent
+
+  - dataSource: Lambda_updateTaskStatusByUser
+    type: Mutation
+    field: updateTaskStatusByUser
+
+  - dataSource: Lambda_createTenantAccount
+    type: Mutation
+    field: createTenantAccount
+
+  - dataSource: Lambda_cancelTask
+    type: Mutation
+    field: cancelTask
+
+  - dataSource: catalogTable
+    type: Mutation
+    field: updateTenantAccountStatus
+
+  - dataSource: catalogTable
+    type: Mutation
+    field: putTenantOnHold
+
+  - dataSource: customFilterTable
+    type: Query
+    field: getCustomFilters
+  - dataSource: customFilterTable
+    type: Mutation
+    field: createCustomFilter
+  - dataSource: customFilterTable
+    type: Mutation
+    field: deleteCustomFilter
+  - dataSource: customFilterTable
+    type: Mutation
+    field: updateCustomFilter
+
+  - dataSource: routeTable
+    type: Mutation
+    field: createRoute
+
+  - dataSource: routeTable
+    type: Mutation
+    field: updateRoute
+
+  # - dataSource: catalogTable
+  #   type: Query
+  #   field: getTenantCatalog
+
+  - dataSource: catalogTable
+    type: Query
+    field: getTenantAccountsByStatus
+
+  - dataSource: routeTable
+    type: Query
+    field: getRoutes
+
+  - dataSource: routeTable
+    type: Query
+    field: getRoute
+
+  - dataSource: Lambda_getTenantInfo
+    type: Query
+    field: getTenantInfo
+
+  - dataSource: Lambda_getTeams
+    type: Query
+    field: getTeams
+
+  - dataSource: Lambda_getTeam
+    type: Query
+    field: getTeam
+
+  - dataSource: Lambda_getHubs
+    type: Query
+    field: getHubs
+
+  - dataSource: Lambda_getHub
+    type: Query
+    field: getHub
+
+  - dataSource: Lambda_createHub
+    type: Mutation
+    field: createHub
+
+  - dataSource: Lambda_updateHub
+    type: Mutation
+    field: updateHub
+
+  - dataSource: Lambda_deleteHub
+    type: Mutation
+    field: deleteHub
+
+  - dataSource: Lambda_getLocations
+    type: Query
+    field: getLocations
+
+  - dataSource: Lambda_getLocation
+    type: Query
+    field: getLocation
+
+  - dataSource: Lambda_createLocation
+    type: Mutation
+    field: createLocation
+
+  - dataSource: Lambda_updateLocation
+    type: Mutation
+    field: updateLocation
+
+  - dataSource: Lambda_deleteLocation
+    type: Mutation
+    field: deleteLocation
+
+  - dataSource: Lambda_createTeam
+    type: Mutation
+    field: createTeam
+
+  - dataSource: Lambda_updateTeam
+    type: Mutation
+    field: updateTeam
+
+  - dataSource: Lambda_deleteTeam
+    type: Mutation
+    field: deleteTeam
+
+  # - dataSource: Lambda_createConnection
+  #   type: Mutation
+  #   field: createConnection
+
+  # - dataSource: Lambda_updateConnection
+  #   type: Mutation
+  #   field: updateConnection
+
+  # - dataSource: Lambda_getConnections
+  #   type: Query
+  #   field: getConnections
+
+  - dataSource: Lambda_getWebUsers
+    type: Query
+    field: getWebUsers
+
+  # - dataSource: Lambda_deleteConnection
+  #   type: Mutation
+  #   field: deleteConnection
+
+  - dataSource: Lambda_countTenantAccounts
+    type: TenantAccountConnection
+    field: count
+
+  - dataSource: Lambda_getAgents
+    type: Query
+    field: getAgents
+
+  #field resolvers
+  - dataSource: Lambda_getAgentActiveTasks
+    type: Agent
+    field: activeTaskCount
+
+  - dataSource: catalogTable
+    type: Tenant
+    field: country
+
+  - dataSource: catalogTable
+    type: Tenant
+    field: phone
+
+
+  - type: Mutation
+    field: createWebUser
+    request: 'pipeline-resolvers/create-web-user-before.vtl'
+    response: 'pipeline-resolvers/create-web-user-after.vtl'
+    kind: PIPELINE
+    functions:
+      - createCognitoUser
+      - writeWebUserDB
+
+  - type: Mutation
+    field: updateWebUser
+    request: 'pipeline-resolvers/update-web-user-before.vtl'
+    response: 'pipeline-resolvers/update-web-user-after.vtl'
+    kind: PIPELINE
+    functions:
+      - updateUserAtCognito
+      - updateUserAtDB
+
+  - type: Mutation
+    field: createAgent
+    request: 'pipeline-resolvers/create-agent-before.vtl'
+    response: 'pipeline-resolvers/create-agent-after.vtl'
+    kind: PIPELINE
+    functions:
+      - createCognitoUser
+      - writeAgentDB
+
+  - type: Mutation
+    field: updateAgent
+    request: 'pipeline-resolvers/update-agent-before.vtl'
+    response: 'pipeline-resolvers/update-agent-after.vtl'
+    kind: PIPELINE
+    functions:
+      - updateAgentAtCognito
+      - updateAgentAtDB
+
+  - type: Mutation
+    field: createTaskInvite
+    request: 'pipeline-resolvers/create-task-invite-before.vtl'
+    response: 'pipeline-resolvers/create-task-invite-after.vtl'
+    kind: PIPELINE
+    functions:
+      - createTaskInviteFunc
+      - updateTaskStatusByUserFunc
+
+  - type: Query
+    field: getTasksByCustomFilter
+    request: 'pipeline-resolvers/get-custom-filter-executed-before.vtl'
+    response: 'pipeline-resolvers/get-custom-filter-executed-after.vtl'
+    kind: PIPELINE
+    functions:
+      - getCustomFilterFunc
+      - getCustomFilterExecutedQueryFunc
+
+  # - type: Mutation
+  #   field: updateTenant
+  #   request: 'pipeline-resolvers/update-tenant-before.vtl'
+  #   response: 'pipeline-resolvers/update-tenant-after.vtl'
+  #   kind: PIPELINE
+  #   functions:
+  #     - updateTenantAtDynamoDB
+  #     - updateTenantAtPostgres
+
+functionConfigurations:
+  - dataSource: Lambda_createWebUser
+    name: createCognitoUser
+    request: 'Function.createCognitoUser.request.vtl'
+    response: 'Function.createCognitoUser.response.vtl'
+
+  - dataSource: Lambda_writeWebUserDB
+    name: writeWebUserDB
+    request: 'Function.writeWebUserDB.request.vtl'
+    response: 'Function.writeWebUserDB.response.vtl'
+
+  - dataSource: Lambda_updateWebUser
+    name: updateUserAtCognito
+    request: 'Function.updateUserAtCognito.request.vtl'
+    response: 'Function.updateUserAtCognito.response.vtl'
+
+  - dataSource: Lambda_updateWebUserDB
+    name: updateUserAtDB
+    request: 'Function.updateUserAtDB.request.vtl'
+    response: 'Function.updateUserAtDB.response.vtl'
+
+  - dataSource: Lambda_createAgent
+    name: writeAgentDB
+    request: 'Function.writeAgentDB.request.vtl'
+    response: 'Function.writeAgentDB.response.vtl'
+
+  - dataSource: Lambda_updateAgentDB
+    name: updateAgentAtDB
+    request: 'Function.updateAgentAtDB.request.vtl'
+    response: 'Function.updateAgentAtDB.response.vtl'
+
+  - dataSource: Lambda_updateAgentCognito
+    name: updateAgentAtCognito
+    request: 'Function.updateAgentAtCognito.request.vtl'
+    response: 'Function.updateAgentAtCognito.response.vtl'
+
+  - dataSource: Lambda_createTaskInviteFunc
+    name: createTaskInviteFunc
+    request: 'Function.createTaskInviteFunc.request.vtl'
+    response: 'Function.createTaskInviteFunc.response.vtl'
+
+  - dataSource: Lambda_updateTaskStatusByUserFunc
+    name: updateTaskStatusByUserFunc
+    request: 'Function.updateTaskStatusByUserFunc.request.vtl'
+    response: 'Function.updateTaskStatusByUserFunc.response.vtl'
+
+  - dataSource: Lambda_getCustomFilterFunc
+    name: getCustomFilterFunc
+    request: 'Function.getCustomFilterFunc.request.vtl'
+    response: 'Function.getCustomFilterFunc.response.vtl'
+
+  - dataSource: Lambda_getCustomFilterExecutedQueryFunc
+    name: getCustomFilterExecutedQueryFunc
+    request: 'Function.getCustomFilterExecutedQueryFunc.request.vtl'
+    response: 'Function.getCustomFilterExecutedQueryFunc.response.vtl'
+
+  # - dataSource: Lambda_updateTenantAtDynamoDB
+  #   name: updateAgentAtDynamoDB
+  #   request: 'Function.updateTenantAtDynamoDB.request.vtl'
+  #   response: 'Function.updateTenantAtDynamoDB.response.vtl'
+
+  # - dataSource: Lambda_updateTenantAtPostgres
+  #   name: updateAgentAtPostgres
+  #   request: 'Function.updateAgentAtPostgres.request.vtl'
+  #   response: 'Function.updateAgentAtPostgres.response.vtl'
+
+  # - dataSource:
+
+
+dataSources:
+  - type: NONE
+    name: none
+
+  #DynamoDB data sources
+  - type: AMAZON_DYNAMODB
+    name: catalogTable
+    description: 'Tenant Catalog table'
+    config:
+      tableName: { Ref: CatalogDB }
+  - type: AMAZON_DYNAMODB
+    name: customFilterTable
+    description: 'Custom Filter table'
+    config:
+      tableName: { Ref: CustomFilterDB }
+  - type: AMAZON_DYNAMODB
+    name: routeTable
+    description: 'Routes table'
+    config:
+      tableName: { Ref: RouteDB }
+  - type: AWS_LAMBDA
+    name: Lambda_createTenantAccount
+    description: 'Lambda DataSource - Tenant catalogs'
+    config:
+      functionName: createTenantAccount
+
+  - type: AWS_LAMBDA
+    name: Lambda_getTenantInfo
+    description: 'Lambda DataSource - Tenant from RDS'
+    config:
+      functionName: getTenantInfo
+
+  - type: AWS_LAMBDA
+    name: Lambda_getTeams
+    description: 'Lambda DataSource - Teams from RDS'
+    config:
+      functionName: getTeams
+
+  - type: AWS_LAMBDA
+    name: Lambda_getHubs
+    description: 'Lambda DataSource - Hubs from RDS'
+    config:
+      functionName: getHubs
+
+  - type: AWS_LAMBDA
+    name: Lambda_createHub
+    description: 'Lambda DataSource - Hubs from RDS'
+    config:
+      functionName: createHub
+
+  - type: AWS_LAMBDA
+    name: Lambda_createTeam
+    description: 'Lambda DataSource - Hubs from RDS'
+    config:
+      functionName: createTeam
+
+  - type: AWS_LAMBDA
+    name: Lambda_getHub
+    description: 'Lambda DataSource - Hubs from RDS'
+    config:
+      functionName: getHub
+
+  - type: AWS_LAMBDA
+    name: Lambda_getTeam
+    description: 'Lambda DataSource - Teams from RDS'
+    config:
+      functionName: getTeam
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateHub
+    description: 'Lambda DataSource - HUbs from RDS'
+    config:
+      functionName: updateHub
+
+  - type: AWS_LAMBDA
+    name: Lambda_deleteHub
+    description: 'Lambda DataSource - HUbs from RDS'
+    config:
+      functionName: deleteHub
+
+  - type: AWS_LAMBDA
+    name: Lambda_getLocation
+    description: 'Lambda DataSource - Locations from RDS'
+    config:
+      functionName: getLocation
+
+  - type: AWS_LAMBDA
+    name: Lambda_getLocations
+    description: 'Lambda DataSource - Locations from RDS'
+    config:
+      functionName: getLocations
+
+  - type: AWS_LAMBDA
+    name: Lambda_createLocation
+    description: 'Lambda DataSource - Locations from RDS'
+    config:
+      functionName: createLocation
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateLocation
+    description: 'Lambda DataSource - Locations from RDS'
+    config:
+      functionName: updateLocation
+
+  - type: AWS_LAMBDA
+    name: Lambda_deleteLocation
+    description: 'Lambda DataSource - Locations from RDS'
+    config:
+      functionName: deleteLocation
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateTeam
+    description: 'Lambda DataSource - Teams from RDS'
+    config:
+      functionName: updateTeam
+
+  - type: AWS_LAMBDA
+    name: Lambda_deleteTeam
+    description: 'Lambda DataSource - Teams from RDS'
+    config:
+      functionName: deleteTeam
+
+  # - type: AWS_LAMBDA
+  #   name: Lambda_createConnection
+  #   description: 'Lambda DataSource - Connections from RDS'
+  #   config:
+  #     functionName: createConnection
+
+  # - type: AWS_LAMBDA
+  #   name: Lambda_getConnections
+  #   description: 'Lambda DataSource - Connections from RDS'
+  #   config:
+  #     functionName: getConnections
+
+  # - type: AWS_LAMBDA
+  #   name: Lambda_updateConnection
+  #   description: 'Lambda DataSource - Connections from RDS'
+  #   config:
+  #     functionName: updateConnection
+
+  - type: AWS_LAMBDA
+    name: Lambda_createWebUser
+    description: 'Lambda DataSource - Connections from RDS'
+    config:
+      functionName: createWebUser
+
+  - type: AWS_LAMBDA
+    name: Lambda_writeWebUserDB
+    description: 'Lambda DataSource - Connections from RDS'
+    config:
+      functionName: writeWebUserDB
+
+  # - type: AWS_LAMBDA
+  #   name: Lambda_deleteConnection
+  #   description: 'Lambda DataSource - Connections from RDS'
+  #   config:
+  #     functionName: deleteConnection
+
+  - type: AWS_LAMBDA
+    name: Lambda_getWebUsers
+    description: 'Lambda DataSource - wEBuSER from RDS'
+    config:
+      functionName: getWebUsers
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateWebUser
+    description: 'Lambda DataSource - WebUser from RDS'
+    config:
+      functionName: updateWebUser
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateWebUserDB
+    description: 'Lambda DataSource - wEBuSER from RDS'
+    config:
+      functionName: updateWebUserDB
+
+  - type: AWS_LAMBDA
+    name: Lambda_createAgent
+    description: 'Lambda DataSource - wEBuSER from RDS'
+    config:
+      functionName: createAgent
+
+  - type: AWS_LAMBDA
+    name: Lambda_getAgents
+    description: 'Lambda DataSource - Agent from RDS'
+    config:
+      functionName: getAgents
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateAgentDB
+    description: 'Lambda DataSource - Tenant catalogs'
+    config:
+      functionName: updateAgentAtDB
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateAgentCognito
+    description: 'Lambda DataSource - Tenant catalogs'
+    config:
+      functionName: updateAgentCognito
+
+  - type: AWS_LAMBDA
+    name: Lambda_countTenantAccounts
+    description: 'Lambda DataSource - Tenant catalogs'
+    config:
+      functionName: countTenantAccounts
+      #//Lambda_updateAgentCognito
+
+
+  - type: AWS_LAMBDA
+    name: Lambda_createTask
+    description: 'Lambda DataSource - Tenant Tasks'
+    config:
+      functionName: createTask
+
+  - type: AWS_LAMBDA
+    name: Lambda_createTaskBulk
+    description: 'Lambda DataSource - Create Tasks in bulk'
+    config:
+      functionName: createTaskBulk
+
+  - type: AWS_LAMBDA
+    name: Lambda_getTasks
+    description: 'Lambda DataSource - Tenant Tasks'
+    config:
+      functionName: getTasks
+
+  - type: AWS_LAMBDA
+    name: Lambda_assignAgentToTask
+    description: 'Lambda DataSource - Tenant Tasks'
+    config:
+      functionName: assignAgentToTask
+
+  - type: AWS_LAMBDA
+    name: Lambda_assignTeamToTask
+    description: 'Lambda DataSource - Tenant Tasks'
+    config:
+      functionName: assignTeamToTask
+
+  - type: AWS_LAMBDA
+    name: Lambda_getAgentsTasks
+    description: 'Lambda DataSource - Tenant Tasks'
+    config:
+      functionName: getAgentsTasks
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateTaskStatusByAgent
+    description: 'Lambda DataSource - Tenant Tasks'
+    config:
+      functionName: updateTaskStatusByAgent
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateTaskStatusByUser
+    description: 'Lambda DataSource - Tenant Tasks'
+    config:
+      functionName: updateTaskStatusByUser
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateTaskStatusByUserFunc
+    description: 'Lambda DataSource - Tenant Tasks'
+    config:
+      functionName: updateTaskStatusByUser
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateOwnWorkStatus
+    description: 'Lambda DataSource - Tenant Tasks'
+    config:
+      functionName: updateOwnWorkStatus
+
+  - type: AWS_LAMBDA
+    name: Lambda_getAgentsByTeamAndStatus
+    description: 'Lambda DataSource - Tenant Tasks'
+    config:
+      functionName: getAgentsByTeamAndStatus
+
+  - type: AWS_LAMBDA
+    name: Lambda_getSelfAgentProfile
+    description: 'Lambda DataSource - Tenant Tasks'
+    config:
+      functionName: getSelfAgentProfile
+
+  - type: AWS_LAMBDA
+    name: Lambda_getTaskHistory
+    description: 'Lambda DataSource - Tenant Tasks History'
+    config:
+      functionName: getTaskHistory
+
+  - type: AWS_LAMBDA
+    name: Lambda_getSelfWebUserProfile
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: getSelfWebUserProfile
+
+  - type: AWS_LAMBDA
+    name: Lambda_getTasksByTeam
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: getTasksByTeam
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateTask
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: updateTask
+
+  - type: AWS_LAMBDA
+    name: Lambda_createTaskType
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: createTaskType
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateTaskType
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: updateTaskType
+
+  - type: AWS_LAMBDA
+    name: Lambda_getTaskType
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: getTaskType
+
+  - type: AWS_LAMBDA
+    name: Lambda_createTaskStatusMessage
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: createTaskStatusMessage
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateTaskStatusMessage
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: updateTaskStatusMessage
+
+  - type: AWS_LAMBDA
+    name: Lambda_getTaskStatusMessage
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: getTaskStatusMessage
+
+  - type: AWS_LAMBDA
+    name: Lambda_deleteTaskType
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: deleteTaskType
+
+  - type: AWS_LAMBDA
+    name: Lambda_deleteTaskStatusMessage
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: deleteTaskStatusMessage
+
+  - type: AWS_LAMBDA
+    name: Lambda_createTaskInviteFunc
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: createTaskInvite
+
+  - type: AWS_LAMBDA
+    name: Lambda_acceptTaskInvite
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: acceptTaskInvite
+
+  - type: AWS_LAMBDA
+    name: Lambda_rejectTaskInvite
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: rejectTaskInvite
+
+  - type: AWS_LAMBDA
+    name: Lambda_getInvitesByAgent
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: getInvitesByAgent
+
+  - type: AWS_LAMBDA
+    name: Lambda_createTaskTenantInvite
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: createTaskTenantInvite
+
+  - type: AWS_LAMBDA
+    name: Lambda_getTaskStatus
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: getTaskStatus
+
+  - type: AWS_LAMBDA
+    name: Lambda_getTenantAgents
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: getTenantAgents
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateAgentLocations
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: updateAgentLocations
+
+  - type: AWS_LAMBDA
+    name: Lambda_getAgentActiveTasks
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: getAgentActiveTasks
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateTenantInfo
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: updateTenantInfo
+
+  - type: AWS_LAMBDA
+    name: Lambda_updateEndpoint
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: customUpdateEndpoint
+
+  - type: AWS_LAMBDA
+    name: Lambda_cancelTask
+    description: 'Lambda DataSource - Web User Profile'
+    config:
+      functionName: cancelTask
+
+  - type: AWS_LAMBDA
+    name: Lambda_getCustomData
+    description: 'Lambda DataSource - Tasks Custom Data'
+    config:
+      functionName: getCustomData
+
+  - type: AWS_LAMBDA
+    name: Lambda_getCustomFilterFunc
+    description: 'Lambda DataSource - getCustomfilter'
+    config:
+      functionName: getCustomFilter
+  - type: AWS_LAMBDA
+    name: Lambda_getCustomFilterExecutedQueryFunc
+    description: 'Lambda DataSource - getCustomfilter'
+    config:
+      functionName: getCustomFilterExecutedQuery
+

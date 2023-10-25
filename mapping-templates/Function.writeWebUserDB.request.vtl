@@ -1,0 +1,14 @@
+#set( $tenant_HASH = $ctx.identity.claims.get("custom:TENANT_HASH"))
+#if( $ctx.prev.result.userCreated == false)
+	$util.error("User creation failed! try again!")
+#end
+{
+    "version": "2017-02-28",
+    "operation": "Invoke",
+    "payload": {
+        "field": "writeWebUserDB",
+        "arguments":  $utils.toJson($context.arguments),
+        "tenantHash": $utils.toJson($tenant_HASH),
+        "userID": $util.toJson($ctx.prev.result.userID)
+    }
+}

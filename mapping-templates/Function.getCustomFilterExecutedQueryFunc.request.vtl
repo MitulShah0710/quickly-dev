@@ -1,0 +1,9 @@
+#set( $tenant_HASH =  $context.identity.claims.get("custom:TENANT_HASH") )
+{
+    "operation": "Invoke",
+     "payload": {
+        "arguments":  $utils.toJson($ctx.prev.result),
+        "tenantId":$util.toJson($tenant_HASH)
+    }
+    
+}

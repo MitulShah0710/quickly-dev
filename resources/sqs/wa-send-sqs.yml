@@ -1,0 +1,7 @@
+Type: AWS::SQS::Queue
+Properties:
+  MessageRetentionPeriod: 14400
+  VisibilityTimeout: 180
+  RedrivePolicy:
+    deadLetterTargetArn: !GetAtt NotificationsDlq.Arn
+    maxReceiveCount: 3

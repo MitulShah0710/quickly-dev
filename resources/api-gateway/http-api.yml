@@ -1,0 +1,5 @@
+Type: AWS::ApiGatewayV2::Api
+Properties:
+  Name: location-updates-${opt:stage}
+  Description: 'Api Gateway v2 resource to receive mobile app live location updates'
+  ProtocolType: HTTP

@@ -1,0 +1,16 @@
+#**
+Resolvers with None data sources can locally publish events that fire
+subscriptions or otherwise transform data without hitting a backend data source.
+The value of 'payload' is forwarded to $ctx.result in the response mapping template.
+*#
+{
+    "version": "2017-02-28",
+    "payload": {
+        "ID": "4de29824-b6ec-4ee0-acf7-bd1b2f72b355",
+        "agentID": ["cbcd9ac8-c61e-4449-89cf-f2150c75d05d", "2f7b465b-113f-4299-8344-ef02f0edff80"],
+        "TaskID": "4de29824-b6ec-4ee0-acf7-bd1b2f72b355",
+        "Task": {
+            "ID": "4de29824-b6ec-4ee0-acf7-bd1b2f72b355"
+        }
+    }
+}

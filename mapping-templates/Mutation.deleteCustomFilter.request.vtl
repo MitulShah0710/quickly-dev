@@ -1,0 +1,9 @@
+#set( $userId = $ctx.identity.username )
+{
+    "version" : "2017-02-28",
+    "operation" : "DeleteItem",
+    "key" : {
+        "userId" : $util.dynamodb.toDynamoDBJson($userId),
+        "filterId" : $util.dynamodb.toDynamoDBJson($ctx.args.filterId)
+    }
+}

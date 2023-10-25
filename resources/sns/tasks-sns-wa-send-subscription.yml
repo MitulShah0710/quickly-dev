@@ -1,0 +1,10 @@
+Type: AWS::SNS::Subscription
+Properties:
+  TopicArn: !Ref TaskEventsTopic
+  Protocol: sqs
+  Endpoint: !GetAtt WaSendMessageSqs.Arn
+  FilterPolicy:
+    entity:
+      - TASK
+    notifications:
+      - WA

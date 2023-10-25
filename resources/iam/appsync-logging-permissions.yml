@@ -1,0 +1,23 @@
+Type: "AWS::IAM::Role"
+Properties:
+  RoleName: "quickly-appsync-logs-${self:provider.region}-${opt:stage}-role"
+  AssumeRolePolicyDocument:
+    Version: "2012-10-17"
+    Statement:
+      - Effect: "Allow"
+        Principal:
+          Service:
+            - "appsync.amazonaws.com"
+        Action:
+          - "sts:AssumeRole"
+  Policies:
+    - PolicyName: "quickly-appsync-logs-${self:provider.region}-${opt:stage}-policy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action: 
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+            Resource: "*"

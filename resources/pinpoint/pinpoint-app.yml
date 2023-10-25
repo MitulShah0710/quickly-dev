@@ -1,0 +1,3 @@
+Type: AWS::Pinpoint::App
+Properties:
+  Name: Quickly-${opt:stage}

@@ -1,0 +1,641 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: VPC, RDS and RDS Proxy resources
+Parameters:
+  EnvironmentName:
+    Description: Environment Name for delpyment
+    Type: String
+    Default: development
+    AllowedValues:
+      - development
+      - staging
+      - production
+  VpcBlock:
+    Description: VPC CIDR Range
+    Type: String
+    Default: 10.30.0.0/16
+  PublicSubnet1Block:
+    Description: Public Subnet1 CIDR Range
+    Type: String
+    Default: 10.30.1.0/24
+  PublicSubnet2Block:
+    Description: Public Subnet2 CIDR Range
+    Type: String
+    Default: 10.30.2.0/24
+  PrivateSubnet1Block:
+    Description: Private Subnet` CIDR Range
+    Type: String
+    Default: 10.30.10.0/24
+  PrivateSubnet2Block:
+    Description: Private Subnet2 CIDR Range
+    Type: String
+    Default: 10.30.20.0/24
+  Engine:
+    Description: Select Database Engine Version
+    Type: String
+    Default: 12.8
+    AllowedValues:
+      - 11.13
+      - 12.8
+      - 13.4
+  DBInstanceClass:
+    Default: db.t3.medium
+    Description: Database Instance Class
+    Type: String
+    AllowedValues:
+    - db.t3.medium
+    - db.t4g.medium
+    - db.t4g.large
+    - db.r5.large
+    - db.r5.xlarge
+    - db.r5.2xlarge
+    - db.r5.4xlarge
+    - db.r5.8xlarge
+    - db.r5.12xlarge
+    - db.r5.16xlarge
+    - db.r5.24xlarge
+    - db.r6g.large
+    - db.r6g.xlarge
+    - db.r6g.2xlarge
+    - db.r6g.4xlarge
+    - db.r6g.8xlarge
+    - db.r6g.12xlarge
+    - db.r6g.16xlarge
+    - db.x2g.large
+    - db.x2g.xlarge
+    - db.x2g.2xlarge
+    - db.x2g.4xlarge
+    - db.x2g.8xlarge
+    - db.x2g.12xlarge
+    - db.x2g.16xlarge
+    ConstraintDescription: Must be a valid EC2 instance type.
+  DBAllocatedStorage:
+    Default: '5'
+    Description: The size of the database (Gb)
+    Type: Number
+    MinValue: '5'
+    MaxValue: '1024'
+    ConstraintDescription: must be between 5 and 1024Gb.
+  MultiAZDatabase:
+    Description: Enable Multi Availability Zones?
+    Type: String
+    Default: 'false'
+    AllowedValues:
+    - 'true'
+    - 'false'
+  TcpPort:
+    Description: Enter RDS Listening TCP Port number.
+    Type: Number
+    Default: '5432'
+  PreferredBackupWindow:
+    Description: Enter Preferred Backup Window Time (UTC).
+    Type: String
+    Default: 17:00-19:00
+  PreferredMaintenanceWindow:
+    Description: Enter Preferred Maintenance Window Time (UTC).
+    Type: String
+    Default: Sun:19:00-Sun:23:00
+  DBName:
+    Description: RDS Database Name
+    Type: String
+    Default: quickly
+  DBMasterUser:
+    Description: RDS Database User Name
+    Type: String
+    Default: quickly
+  DBMasterPassword:
+    Description: RDS Database Password
+    Type: String
+    Default: quickly123
+  
+Mappings: 
+  DBFamilyMap: 
+    "11.13":
+      "family": "aurora-postgresql11"
+      "compatibility": "POSTGRESQL"
+    "12.8":
+      "family": "aurora-postgresql12"
+      "compatibility": "POSTGRESQL"
+    "13.4":
+      "family": "aurora-postgresql13"
+      "compatibility": "POSTGRESQL"
+
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcBlock
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - !Ref EnvironmentName
+              - "VPC"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - !Ref EnvironmentName
+              - "InternetGateway"
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet1Block
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select
+        - "0"
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - !Ref EnvironmentName
+              - "PublicSubnet1"
+  
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet2Block
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select
+        - "1"
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - !Ref EnvironmentName
+              - "PublicSubnet2"
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet1Block
+      AvailabilityZone: !Select
+        - "0"
+        - !GetAZs ""
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - !Ref EnvironmentName
+              - "PrivateSubnet1"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet2Block
+      AvailabilityZone: !Select
+        - "1"
+        - !GetAZs ""
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - !Ref EnvironmentName
+              - "PrivateSubnet2"
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - !Ref EnvironmentName
+              - "PublicRouteTable"
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - !Ref EnvironmentName
+              - "PrivateRouteTable"
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  DefaultSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: !Ref 'AWS::StackName'
+      VpcId: !Ref VPC
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref ClusterSecurityGroup
+  
+  DefaultSecurityGroupIngressself:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !GetAtt 'DefaultSecurityGroup.GroupId'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref DefaultSecurityGroup
+      Description: 'Self Reference' 
+
+  DefaultSecurityGroupIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !GetAtt 'DefaultSecurityGroup.GroupId'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref ClusterSecurityGroup
+      Description: 'RDS Reference' 
+        
+  VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref DefaultSecurityGroup
+      ServiceName: com.amazonaws.us-east-1.execute-api
+      SubnetIds:
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet1
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+
+  # PrivateAPIGatewayEndpoint:
+  #   Type: AWS::ApiGateway::RestApi
+  #   Properties:
+  #     Name: !Join
+  #           - "-"
+  #           - - !Ref AWS::StackName
+  #             - !Ref EnvironmentName
+  #             - "vpc-transfer"
+  #     EndpointConfiguration:
+  #       Types:
+  #         - PRIVATE
+  #       VpcEndpointIds:
+  #         - !Ref VPCEndpoint
+  #     Policy:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: Deny
+  #           Principal: "*"
+  #           Action: "execute-api:Invoke"
+  #           Resource: !Join ["", ["arn:aws:execute-api:", { Ref: AWS::Region }, ":", { Ref: AWS::AccountId }, ":", "*/*/*/*" ]] #"arn:aws:execute-api:us-east-1:606435793259:nquua1v4z4/*/*/*"
+  #           Condition:
+  #             StringNotEquals:
+  #               "aws:sourceVpc": !Ref VPC
+  #         - Effect: Allow
+  #           Principal: "*"
+  #           Action: "execute-api:Invoke"
+  #           Resource: !Join ["", ["arn:aws:execute-api:", { Ref: AWS::Region }, ":", { Ref: AWS::AccountId }, ":", "*/*/*/*" ]]
+
+  # #/send-push
+  # PrivateAPIGatewaySendPushResource:
+  #   Type: AWS::ApiGateway::Resource
+  #   Properties:
+  #     ParentId: !GetAtt PrivateAPIGatewayEndpoint.RootResourceId
+  #     PathPart: send-push
+  #     RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+  # #/send-push - POST
+  # PrivateAPIGatewaySendPushMethod:
+  #   Type: AWS::ApiGateway::Method
+  #   Properties:
+  #     HttpMethod: POST
+  #     AuthorizationType: "NONE"
+  #     ResourceId: !Ref PrivateAPIGatewaySendPushResource
+  #     RestApiId: !Ref PrivateAPIGatewayEndpoint
+  
+  # #/audit-logs
+  # PrivateAPIGatewayauditlogsResource:
+  #   Type: AWS::ApiGateway::Resource
+  #   Properties:
+  #     ParentId: !GetAtt PrivateAPIGatewayEndpoint.RootResourceId
+  #     PathPart: audit-logs
+  #     RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+  # #/audit-logs - POST
+  # PrivateAPIGatewayauditlogsMethod:
+  #   Type: AWS::ApiGateway::Method
+  #   Properties:
+  #     HttpMethod: POST
+  #     AuthorizationType: "NONE"
+  #     ResourceId: !Ref PrivateAPIGatewayauditlogsResource
+  #     RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+  ClusterSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: !Ref 'AWS::StackName'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: !Ref TcpPort
+        ToPort: !Ref TcpPort
+        Description: 'Access to Bastion Host Security Group'
+      VpcId: !Ref VPC
+
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: !Ref 'AWS::StackName'
+      SubnetIds: 
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  ClusterSecurityGroupIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !GetAtt 'ClusterSecurityGroup.GroupId'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref ClusterSecurityGroup
+      Description: 'Self Reference' 
+
+  RDSDBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: !Join [ "- ", [ "Aurora PG Cluster Parameter Group for  Cloudformation Stack ", !Ref DBName ] ]
+      Family: !FindInMap [DBFamilyMap, !Ref Engine, "family"] 
+      Parameters:
+        rds.force_ssl: 0
+
+  DBParamGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: !Join [ "- ", [ "Aurora PG Database Instance Parameter Group for Cloudformation Stack ", !Ref DBName ] ]
+      Family: !FindInMap [DBFamilyMap, !Ref Engine, "family"] 
+      Parameters:
+        shared_preload_libraries: auto_explain,pg_stat_statements,pg_hint_plan,pgaudit
+        log_statement: "ddl"
+        log_connections: 1
+        log_disconnections: 1
+        log_lock_waits: 1
+        log_min_duration_statement: 5000
+        auto_explain.log_min_duration: 5000
+        auto_explain.log_verbose: 1
+        log_rotation_age: 1440
+        log_rotation_size: 102400
+        rds.log_retention_period: 10080
+        random_page_cost: 1
+        track_activity_query_size: 16384
+        idle_in_transaction_session_timeout: 7200000
+        statement_timeout: 7200000
+        search_path: '"$user",public'
+
+  AuroraDBCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: !Ref Engine
+      DatabaseName: !Ref DBName
+      Port: !Ref TcpPort
+      MasterUsername: !Ref DBMasterUser
+      MasterUserPassword: !Ref DBMasterPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+      - !Ref DefaultSecurityGroup
+      DBClusterParameterGroupName: !Ref RDSDBClusterParameterGroup
+        
+  AuroraDBFirstInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      CopyTagsToSnapshot: true  
+      DBInstanceClass:
+        Ref: DBInstanceClass
+      DBClusterIdentifier: !Ref AuroraDBCluster  
+      Engine: aurora-postgresql
+      EngineVersion: !Ref Engine
+      DBParameterGroupName:
+        Ref: DBParamGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      PubliclyAccessible: false
+      EnablePerformanceInsights: true
+
+  RDSProxy:
+    Type: AWS::RDS::DBProxy
+    Properties:
+      DBProxyName: !Join
+        - "-"
+        - - !Ref AWS::StackName
+          - !Ref EnvironmentName
+          - "proxy"
+      EngineFamily: !FindInMap [DBFamilyMap, !Ref Engine, "compatibility"]
+      RoleArn: !GetAtt RDSProxyRole.Arn
+      Auth:
+        - AuthScheme: SECRETS
+          IAMAuth: DISABLED
+          SecretArn: !Ref RDSSecret
+      VpcSecurityGroupIds:
+        - !Ref DefaultSecurityGroup
+        # - !Ref ClusterSecurityGroup
+      VpcSubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+    DependsOn: AuroraDBFirstInstance
+
+  DBProxyTargetGroup:
+    Type: AWS::RDS::DBProxyTargetGroup
+    Properties:
+      DBProxyName: !Ref RDSProxy
+      DBClusterIdentifiers:
+        - !Ref AuroraDBCluster
+      TargetGroupName: default
+      ConnectionPoolConfigurationInfo:
+        MaxConnectionsPercent: 100
+        MaxIdleConnectionsPercent: 50
+        ConnectionBorrowTimeout: 120
+
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      SecretString: !Sub '{"username":"${DBMasterUser}","password":"${DBMasterPassword}","engine":"postgres","host": "${AuroraDBCluster.Endpoint.Address}","port":"${TcpPort}","dbname":"${DBName}","dbClusterIdentifier":"${AuroraDBCluster}"}'
+        
+  RDSProxyRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - rds.amazonaws.com
+            Action: "sts:AssumeRole"
+      Path: /
+      Policies:
+        - PolicyName: rds-secret-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "secretsmanager:GetSecretValue"
+                Resource: !Join
+                  - ":"
+                  - - "arn:aws:secretsmanager"
+                    - !Ref AWS::Region
+                    - !Ref AWS::AccountId
+                    - "secret:*"
+                  # 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*'
+              - Effect: Allow
+                Action: "kms:Decrypt"
+                Resource: !Join
+                - ":"
+                - - "arn:aws:kms"
+                  - !Ref AWS::Region
+                  - !Ref AWS::AccountId
+                  - "key/*"
+                  # 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
+
+Outputs:
+  VPCId:
+    Description: VPC
+    Value: !Ref VPC
+  PublicSubnet1Id:
+    Description: Public Subnet 1 Id
+    Value: !Ref PublicSubnet1
+  PublicSubnet2Id:
+    Description: Public Subnet 2 Id
+    Value: !Ref PublicSubnet2
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 Id
+    Value: !Ref PrivateSubnet1
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 Id
+    Value: !Ref PrivateSubnet2
+  PublicSubnet1:
+    Description: Public Subnet Detail
+    Value: !GetAtt
+      - PublicSubnet1
+      - AvailabilityZone
+  PublicSubnet2:
+    Description: Public Subnet Detail
+    Value: !GetAtt
+      - PublicSubnet2
+      - AvailabilityZone
+  PrivateSubnet1:
+    Description: Private Subnet Detail
+    Value: !GetAtt
+      - PrivateSubnet1
+      - AvailabilityZone
+  PrivateSubnet2:
+    Description: Private Subnet Detail
+    Value: !GetAtt
+      - PrivateSubnet2
+      - AvailabilityZone
+  AuroraDBClusterPort:
+    Description: AuroraDBCluster Detail
+    Value: !GetAtt
+      - AuroraDBCluster
+      - Endpoint.Port
+  AuroraDBClusterEndpoint:
+    Description: AuroraDBCluster Detail
+    Value: !GetAtt
+      - AuroraDBCluster
+      - Endpoint.Address
+  AuroraDBClusterRead:
+    Description: AuroraDBCluster Detail
+    Value: !GetAtt
+      - AuroraDBCluster
+      - ReadEndpoint.Address
+  AuroraDBFirstInstance:
+    Description: AuroraDBFirstInstance Detail
+    Value: !GetAtt
+      - AuroraDBFirstInstance
+      - Endpoint.Port
+  AuroraDBFirstInstance:
+    Description: AuroraDBFirstInstance Detail
+    Value: !GetAtt
+      - AuroraDBFirstInstance
+        - Endpoint.Address
+    Value: !GetAtt
+      - ClusterSecurityGroup
+      - GroupId
+  DefaultSecurityGroup:
+    Description: DefaultSecurityGroup Detail
+    Value: !GetAtt
+      - DefaultSecurityGroup
+      - GroupId
+  RDSProxyEndpoint:
+    Description: RDSProxy Detail
+    Value: !GetAtt
+      - RDSProxy
+      - Endpoint
+  RDSProxy:
+    Description: RDSProxy Detail
+    Value: !GetAtt
+      - RDSProxy
+      - DBProxyArn
+  DBMasterPassword:
+    Description: DatabaseMasterPassword
+    Value: !Ref DBMasterPassword
+  DBMasterUser:
+    Description: Database MasterUser
+    Value: !Ref DBMasterUser
+  DBName:
+    Description: Database Name
+    Value: !Ref DBName
+  VPCEndpoint:
+    Description: 'The VPC endpoint'
+    Value: !Ref VPCEndpoint
+  # PrivateAPIGatewayEndpoint:
+  #   Description: 'The ApiGateway'
+  #   Value: !GetAtt
+  #     - PrivateAPIGatewayEndpoint
+  #     - RootResourceId
+  # PrivateAPIGatewayEndpointId:
+  #   Description: 'The ApiGateway'
+  #   Value: !Ref PrivateAPIGatewayEndpoint

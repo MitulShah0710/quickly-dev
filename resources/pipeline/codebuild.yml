@@ -1,0 +1,65 @@
+Type: "AWS::CodeBuild::Project"
+Condition: CreateNewPipeline
+Properties:
+  Name: quickly-${opt:stage}-build
+  ServiceRole: !GetAtt
+    - CodePipelineServiceRole
+    - Arn
+  Artifacts:
+    Type: CODEPIPELINE
+  Environment:
+    Type: LINUX_CONTAINER
+    ComputeType: BUILD_GENERAL1_MEDIUM
+    Image: "aws/codebuild/standard:5.0"
+    EnvironmentVariables:
+      - Name: environment
+        Value: ${opt:stage}
+  Source:
+    Type: CODEPIPELINE
+    BuildSpec: |
+      version: 0.2
+      phases:
+        install:
+          runtime-versions:
+            nodejs: 14
+          commands:
+            - node --version
+            - npm install --silent --no-progress -g serverless@2
+        build:
+          commands:
+            - ls -al
+            - echo Build started on `date`
+            
+            - echo '{"apiKeyExpiry":1699351873}' > build-data.json
+            - npm i
+
+            - cd layers/
+
+            - echo quickly-custom-libs Build started on `date`
+            - cd quickly-custom-libs/nodejs && npm i
+
+            - echo quickly-model-libs Build started on `date`
+            - cd ../../quickly-model-libs/nodejs && npm i
+
+            - echo static-layer Build started on `date`
+            - cd ../../static-layer/nodejs && npm i
+
+            - cd ../../../
+            - ls -al
+            
+        post_build:
+          commands:
+            - echo static-layer Build started on `date`
+            - sls deploy --stage ${environment}
+            - echo Build completed on `date`
+      artifacts:
+        files:
+          - '**/*'
+  TimeoutInMinutes: 10
+  # VpcConfig:
+  #     SecurityGroupIds: 
+  #       - ${self:custom.securityGroupID}
+  #     Subnets: 
+  #       - ${self:custom.subnet1ID}
+  #       - ${self:custom.subnet2ID}
+  #     VpcId: ${self:custom.sourceVPCID}

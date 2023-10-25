@@ -1,0 +1,13 @@
+#set( $requester = $context.stash.userId )
+#set( $filterId = $context.stash.filterId )
+#set( $tenant_HASH = $context.stash.tenantId)
+{
+    "version": "2017-02-28",
+    "operation": "Invoke",
+    "payload": {
+        "arguments":  $utils.toJson($context.arguments),
+        "requester": $utils.toJson($requester),
+        "filterId": $util.toJson($filterId),
+        "tenantId":$util.toJson($tenant_HASH)
+    }
+}

@@ -1,0 +1,27 @@
+#set( $tenant_HASH = $ctx.identity.claims.get("custom:TENANT_HASH"))
+#set( $routeId = $ctx.args.id )
+
+{
+    "version" : "2018-05-29",
+    "operation" : "UpdateItem",
+    "key": {
+        "pk" : $util.dynamodb.toDynamoDBJson($tenant_HASH),
+        "sk" : $util.dynamodb.toDynamoDBJson($routeId)
+    },
+    "update" : {
+        "expression" : "SET #DATE = :DATE, #SHAPE = :SHAPE, #METRICS = :METRICS, #INPARAMS = :INPARAMS",
+        "expressionNames" : {
+            "#DATE" : "date",
+            "#SHAPE" : "shape",
+            "#METRICS" : "metrics",
+            "#INPARAMS" : "inputParams"
+        },
+        "expressionValues" : {
+            ":DATE" : $util.dynamodb.toDynamoDBJson($ctx.args.info.date),
+            ":SHAPE" : $util.dynamodb.toDynamoDBJson($ctx.args.info.shape),
+            ":METRICS" : $util.dynamodb.toDynamoDBJson($ctx.args.info.metrics),
+            ":INPARAMS" : $util.dynamodb.toDynamoDBJson($ctx.args.info.inputParams)
+        }
+    }
+
+}

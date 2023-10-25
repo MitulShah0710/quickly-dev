@@ -1,0 +1,9 @@
+$util.qr($context.stash.put("userId", $context.identity.username ))
+$util.qr($context.stash.put("tenantId", $context.identity.claims.get("custom:TENANT_HASH") ))
+
+#set ( $userGroups = $ctx.identity.groups)
+#if( !$userGroups.contains("QuicklySuperAdmin"))
+    $util.error("User is not authorized to upate tenant!")
+#end
+
+{}

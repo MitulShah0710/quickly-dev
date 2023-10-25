@@ -1,0 +1,90 @@
+Type: "AWS::IAM::Role"
+Condition: CreateNewPipeline
+Properties:
+  RoleName: quickly-${opt:stage}-pipeline-role
+  AssumeRolePolicyDocument:
+    Version: "2012-10-17"
+    Statement:
+      - Effect: Allow
+        Principal:
+          Service:
+            - codepipeline.amazonaws.com
+            - codebuild.amazonaws.com
+        Action: "sts:AssumeRole"
+  Path: /
+  Policies:
+    - PolicyName: pipeline-policy-development
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - "codecommit:CancelUploadArchive"
+              - "codecommit:GetBranch"
+              - "codecommit:GetCommit"
+              - "codecommit:GetUploadArchiveStatus"
+              - "codecommit:UploadArchive"
+            Resource: !Sub "arn:aws:codecommit:*:${AWS::AccountId}:*"
+          - Effect: Allow
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+            Resource:
+              - !Sub "arn:aws:logs:*:${AWS::AccountId}:log-group:/aws/codebuild/*"
+              - !Sub >-
+                arn:aws:logs:*:${AWS::AccountId}:log-group:/aws/codebuild/*:log-stream:*
+          - Effect: Allow
+            Action:
+              - "codebuild:BatchGetBuilds"
+              - "codebuild:StartBuild"
+              - "codebuild:*"
+            Resource:
+              - !Sub >-
+                arn:aws:codebuild:*:${AWS::AccountId}:project/quickly-${opt:stage}-build
+          - Effect: Allow
+            Action:
+              - "iam:GetRole"
+              - "iam:GetRolePolicy"
+              - "iam:*"
+            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:*"
+          - Effect: Allow
+            Action:
+              - "cloudformation:CreateStack"
+              - "cloudformation:UpdateStack"
+              - "cloudformation:DeleteStack"
+              - "cloudformation:Describe*"
+              - "cloudformation:List*"
+              - "cloudformation:Get*"
+              - "cloudformation:PreviewStackUpdate"
+              - "cloudformation:ValidateTemplate"
+            Resource: !Sub "arn:aws:cloudformation:*:${AWS::AccountId}:stack/*"
+          - Effect: Allow
+            Action:
+              - "elasticbeanstalk:*"
+              - "ec2:*"
+              - "elasticloadbalancing:*"
+              - "autoscaling:*"
+              - "cloudwatch:*"
+              - "s3:*"
+              - "sns:*"
+              - "cloudformation:*"
+              - "rds:*"
+              - "sqs:*"
+              - "ecs:*"
+              - "iam:PassRole"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "*"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:DeleteLogGroup"
+              - "logs:DeleteLogStream"
+              - "logs:DescribeLog*"
+              - "logs:FilterLogEvents"
+            Resource:
+              - !Sub "arn:aws:logs:*:${AWS::AccountId}:log-group::log-stream*"

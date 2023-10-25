@@ -1,0 +1,6 @@
+Type: AWS::Pinpoint::EmailTemplate
+Properties:
+  HtmlPart: "<?xml version=\"1.0\"?>\r\n<!DOCTYPE html>\r\n<html lang=\"en\"><head><title>Quickly<\/title><\/head><body><h1>Welcome to Quickly<\/h1><p>We are excited to onboard you on our platform.<\/p><p>As a first step, please help us in verifying your email by <a href=\"{{link}}\" target=\"_blank\">clicking here<\/a>.<\/p><\/body><\/html>"
+  Subject: "Quickly Verification"
+  TemplateDescription: "String"
+  TemplateName: "QuicklyEmailVerification-${opt:stage}"

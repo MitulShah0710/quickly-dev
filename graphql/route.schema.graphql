@@ -1,0 +1,45 @@
+schema {
+    query: Query
+    mutation: Mutation
+}
+
+type Query {
+    getRoutes(limit: Int!, date: String, nextToken: String): Routes
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin", "TenantWebUser"])
+
+    getRoute(id: ID!): Route
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin", "TenantWebUser"])
+
+
+}
+
+type Mutation {
+    createRoute(info: RouteInput!): Route!
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin", "TenantWebUser"])
+
+    updateRoute(id: ID!, info: RouteInput!): Route!
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin", "TenantWebUser"])
+}
+
+type Routes @aws_api_key
+@aws_cognito_user_pools {
+    routes: [Route]
+    nextToken: String
+}
+
+type Route @aws_api_key
+@aws_cognito_user_pools {
+    id: ID!
+    shape: String
+    metrics: AWSJSON
+    date: AWSDate
+    inputParams: AWSJSON
+}
+
+input RouteInput {
+    shape: String
+    metrics: AWSJSON
+    date: AWSDate
+    inputParams: AWSJSON
+}
+

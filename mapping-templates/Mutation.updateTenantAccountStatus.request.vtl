@@ -1,0 +1,25 @@
+{
+    "version" : "2018-05-29",
+    "operation" : "UpdateItem",
+    "key" : {
+        "id" : { "S" : "${context.arguments.id}" }
+    },
+   	"update": {
+        "expression" : "SET #status = :status",
+        "expressionNames": {
+            "#status" : "status"
+        },
+        "expressionValues" : {
+            ":status" : { "S": "${context.arguments.newStatus}" }
+        }
+    },
+    "condition": {
+        "expression": "#status <> :statusV",
+        "expressionNames": {
+            "#status": "status"
+        },
+        "expressionValues": {
+            ":statusV": { "S": "INIT_READY_WORK" }
+        }
+    }
+}

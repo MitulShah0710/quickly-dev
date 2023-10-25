@@ -1,0 +1,24 @@
+Type: AWS::S3::Bucket
+Properties: 
+  AccessControl: PublicRead
+  BucketName: ${self:custom.environment.originName}-${opt:stage}
+  CorsConfiguration: 
+    CorsRules:
+      - AllowedHeaders:
+          - '*'
+        AllowedMethods:
+          - GET
+        AllowedOrigins:
+          - '*'
+        ExposedHeaders:
+          - Date
+        Id: public-read-cors-policy-1
+        MaxAge: 3600
+  PublicAccessBlockConfiguration: 
+    BlockPublicAcls: false
+    BlockPublicPolicy: false
+    IgnorePublicAcls: false
+    RestrictPublicBuckets: false
+  WebsiteConfiguration: 
+    IndexDocument: index.html
+    ErrorDocument: index.html

@@ -1,0 +1,78 @@
+schema {
+    query: Query
+    mutation: Mutation
+}
+
+type Query {
+    getTeams(limit: Int, offset: Int): TeamConnection
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+
+    getTeam(teamId: String!): Team
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+
+    getTeamAgents(teamID: String!): TeamAgentConnection
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+}
+
+type TeamAgentConnection {
+    agents: [Agent],
+    count: Int,
+    total: Int
+    page: Int 
+}
+
+type Mutation {
+    createTeam(info: TeamInput): Team!
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+
+    updateTeam(teamId: String!, info: TeamUpdateInput! ): Team!
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+
+    deleteTeam(teamID: String!): Boolean!
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+}
+
+input TeamInput {
+    name: String!
+    webUsers: [String!]
+    agents: [String!]
+    HubID: String
+    autoAssignment: Boolean
+    minCoverageRadius: Float
+    maxCoverageRadius: Float
+}
+
+input TeamUpdateInput {
+    name: String
+    webUsers: [String]
+    agents: [String]
+    autoAssignment: Boolean
+    minCoverageRadius: Float
+    maxCoverageRadius: Float
+    HubID: String
+}
+
+type Team @aws_api_key 
+@aws_cognito_user_pools {
+    TenantID: String!
+    ID: ID!
+    name: String
+    WebUsers: [WebUser]
+    Agents: [Agent]
+    Hub: Hub
+    autoAssignment: Boolean
+    minCoverageRadius: Float
+    maxCoverageRadius: Float
+    createdAt: String
+    updatedAt: String
+    createdBy: String
+    updatedBy: String
+    Tasks: [Task] 
+}
+
+type TeamConnection {
+    teams: [Team]
+    total: Int
+    page: Int
+    count: Int
+}

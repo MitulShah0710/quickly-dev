@@ -1,0 +1,20 @@
+#set( $userId = $ctx.identity.username )
+{
+    "version" : "2017-02-28",
+    "operation" : "UpdateItem",
+    "key" : {
+        "userId" : $util.dynamodb.toDynamoDBJson($userId),
+        "filterId" : $util.dynamodb.toDynamoDBJson($ctx.args.input.filterId)
+    },
+    "update" : {
+        "expression" : "SET #filterName = :filterName,#filterContent = :filterContent",
+        "expressionNames" : {
+            "#filterName" : "filterName",
+            "#filterContent" : "filterContent"
+        },
+        "expressionValues" : {
+            ":filterName" : $util.dynamodb.toDynamoDBJson($ctx.args.input.filterName),
+            ":filterContent" : $util.dynamodb.toDynamoDBJson($ctx.args.input.filterContent)
+        }
+    }
+}

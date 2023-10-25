@@ -1,0 +1,16 @@
+{
+    "STAGE_NAME": {
+      "parentCFStack": "full name of the parent cloudformation stack",
+      "region": "Region where to deploy",
+      "memorySize": "Lambda function memory size",
+      "externalId": "UUID for SMS settings Cognito",
+      "fromEmail": "Email address to send email updates",
+      "fromEmailARN": "ARN address of verified SES Identity, available at SES Console(REGION SPECIFIC)",
+      "OAuthRedirect": "Redirect URL for cognito hosted UI",
+      "OAuthDomain": "quickly-appsync-be",
+      "lumigoLayerARN": "Lumigo layer ARN",
+      "isPipeline": true,
+      "repositoryName":"Code Repository Name",
+      "branchName":"Repository Branch"
+    }
+}

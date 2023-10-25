@@ -1,0 +1,6 @@
+Type: AWS::Pinpoint::EmailChannel
+Properties: 
+  ApplicationId: !Ref PinpointApp
+  Enabled: true
+  FromAddress: ${self:custom.environment.fromEmail}
+  Identity: ${self:custom.environment.fromEmailARN}

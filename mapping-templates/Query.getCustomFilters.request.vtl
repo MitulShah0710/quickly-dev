@@ -1,0 +1,12 @@
+#set( $userId = $ctx.identity.username )
+{
+    "version" : "2017-02-28",
+    "operation" : "Query",
+    "query" : {
+        "expression" : "userId = :userId",
+        "expressionValues" : {
+            ":userId" : $util.dynamodb.toDynamoDBJson($userId)
+        }
+    },
+    
+}

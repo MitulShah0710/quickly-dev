@@ -1,0 +1,18 @@
+#set( $tenant_HASH = $ctx.identity.claims.get("custom:TENANT_HASH"))
+#set( $routeId = $util.autoUlid() )
+
+{
+    "version" : "2018-05-29",
+    "operation" : "PutItem",
+    "key": {
+        "pk" : $util.dynamodb.toDynamoDBJson($tenant_HASH),
+        "sk" : $util.dynamodb.toDynamoDBJson($routeId)
+    },
+    "attributeValues" : {
+        "id" : $util.dynamodb.toDynamoDBJson($routeId),
+        "date" : $util.dynamodb.toDynamoDBJson($ctx.args.info.date),
+        "shape" : $util.dynamodb.toDynamoDBJson($ctx.args.info.shape),
+        "metrics" : $util.dynamodb.toDynamoDBJson($ctx.args.info.metrics),
+        "inputParams" : $util.dynamodb.toDynamoDBJson($ctx.args.info.inputParams)
+    }
+}

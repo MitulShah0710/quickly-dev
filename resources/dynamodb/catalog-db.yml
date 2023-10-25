@@ -1,0 +1,32 @@
+Type: AWS::DynamoDB::Table
+Properties:
+  BillingMode: PAY_PER_REQUEST
+  KeySchema:
+    - AttributeName: id
+      KeyType: HASH
+  AttributeDefinitions:
+    - AttributeName: id
+      AttributeType: S
+    - AttributeName: status
+      AttributeType: S
+    - AttributeName: createdAt
+      AttributeType: S
+    - AttributeName: apiKeyValue
+      AttributeType: S
+  StreamSpecification:
+    StreamViewType: NEW_AND_OLD_IMAGES
+  GlobalSecondaryIndexes:
+    - IndexName: status-index
+      KeySchema:
+        - AttributeName: status
+          KeyType: HASH
+        - AttributeName: createdAt
+          KeyType: RANGE
+      Projection:
+        ProjectionType: ALL
+    - IndexName: apikey-index
+      KeySchema:
+        - AttributeName: apiKeyValue
+          KeyType: HASH
+      Projection:
+        ProjectionType: ALL

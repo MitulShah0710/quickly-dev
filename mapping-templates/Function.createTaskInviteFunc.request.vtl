@@ -1,0 +1,14 @@
+#set( $tenant_HASH = $context.stash.tenant_HASH)
+#set( $requester = $context.stash.requester )
+## set($requester_jwt = $ctx.request.headers.get("authorization"))
+
+{
+    "version": "2017-02-28",
+    "operation": "Invoke",
+    "payload": {
+        "field": "createTaskInvite",
+        "arguments":  $utils.toJson($context.arguments),
+        "tenantHash": $utils.toJson($tenant_HASH),
+        "requesterUser": $util.toJson($requester)
+    }
+}

@@ -1,0 +1,7 @@
+Type: "AWS::S3::Bucket"
+Condition: CreateNewPipeline
+DeletionPolicy: Delete
+Properties:
+  AccessControl: Private
+  VersioningConfiguration:
+    Status: Suspended

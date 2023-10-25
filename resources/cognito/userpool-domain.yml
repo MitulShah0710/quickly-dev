@@ -1,0 +1,4 @@
+Type: AWS::Cognito::UserPoolDomain
+Properties: 
+  Domain: ${self:custom.environment.OAuthDomain}-${opt:stage}
+  UserPoolId: !Ref CognitoUserPool

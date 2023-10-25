@@ -1,0 +1,26 @@
+Type: "AWS::IAM::Role"
+Properties:
+  AssumeRolePolicyDocument:
+    Version: '2012-10-17'
+    Statement:
+    - Effect: Allow
+      Principal:
+        Service:
+          - apigateway.amazonaws.com
+      Action:
+        - sts:AssumeRole
+  Policies:
+    - PolicyName: sns-publish
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - sns:Publish
+          Resource: "*" #grants access to all topics
+        - Effect: Allow
+          Action:
+            - logs:PutLogEvents
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+          Resource: "*"

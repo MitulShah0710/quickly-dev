@@ -1,0 +1,3105 @@
+service: quickly-appsync-be
+frameworkVersion: '2'
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  lambdaHashingVersion: 20201221
+  timeout: 60
+  region: ${self:custom.environment.region}
+  memorySize: ${self:custom.environment.memorySize}
+  lambdaInsights:
+    defaultLambdaInsights: true
+  architecture: arm64
+  versionFunctions: false
+  tracing:
+    apiGateway: true
+    lambda: true
+  apiKeys:
+    - sm2-appsync-be-${opt:stage}
+  environment:
+    REGION: ${self:custom.environment.region}
+    CATALOG_DB: !Ref CatalogDB
+    PINPOINT_EMAIL_TEMP: !Ref PinpointEmailTemplate
+    AUDIT_LOGS_DB: !Ref AuditLogsDB
+    CUSTOM_FILTER_DB: !Ref CustomFilterDB
+    PINPOINT_APP: !Ref PinpointApp
+    API_URL: !Join ["", ["https://", !Ref ApiGatewayRestApi, ".execute-api.", { Ref: "AWS::Region" }, ".amazonaws.com/${opt:stage}"]]
+    NODE_ENV: "PROD"
+    DB_URL: ${cf:${self:custom.environment.parentCFStack}.RDSProxyEndpoint}
+    DB_NAME: ${cf:${self:custom.environment.parentCFStack}.DBName}
+    DB_USERNAME: ${cf:${self:custom.environment.parentCFStack}.DBMasterUser}
+    DB_PASSWORD: ${cf:${self:custom.environment.parentCFStack}.DBMasterPassword}
+    PRIVATE_API_ENDPOINT: !Join ["", ["https://", { Ref: PrivateAPIGatewayEndpoint }, '.execute-api.', { Ref: AWS::Region }, '.amazonaws.com/${opt:stage}']]
+    DB_SCHEMA: ${self:custom.environment.dbSchema}
+    FCM_SERVER_KEY: ${self:custom.environment.fcmServerKey}
+    isPipeline: ${self:custom.environment.isPipeline}
+    repositoryName: ${self:custom.environment.repositoryName}
+    branchName: ${self:custom.environment.branchName}
+
+custom:
+  splitStacks:
+    nestedStackCount: 50
+    perFunction: false
+    perType: false
+    perGroupFunction: false
+  environment: ${file(./config.json):${opt:stage}}
+  buildData: ${file(./build-data.json)}
+  appSyncKeyExpiry: ${self:custom.buildData.apiKeyExpiry}
+  securityGroupID: ${cf:${self:custom.environment.parentCFStack}.DefaultSecurityGroup}
+  subnet1ID: ${cf:${self:custom.environment.parentCFStack}.PrivateSubnet1Id}
+  subnet2ID: ${cf:${self:custom.environment.parentCFStack}.PrivateSubnet2Id}
+  sourceVPCID: ${cf:${self:custom.environment.parentCFStack}.VPCId}
+  vpcEndpointID: ${cf:${self:custom.environment.parentCFStack}.VPCEndpoint}
+  stackName: ${self:service}-${opt:stage}
+  appSync:
+    - ${file(appsync.serverless.yml)}
+  GQAppARN: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.Arn
+  lumigo:
+    token: ${self:custom.environment.lumigoLayerToken}
+  jetpack:
+    concurrency: 15
+  output:
+    handler: scripts/output.handler
+    file: stack.json
+
+layers:
+  ${file(./layers/layers.yml)}
+
+package:
+  exclude:
+    - node_modules/**
+    - __tests__/**
+    - mapping-templates/**
+    - '*.json'
+    - '*.yml'
+    - '*.graphql'
+    - 'layers/**'
+    - 'cloudformation/**'
+    - 'db-migrations/**'
+    - '*.md'
+    - '.sequelizerc'
+    - '.npmignore'
+    - '_lumigo/**'
+  excludeDevDependencies: true
+  individually: true
+
+plugins:
+  - serverless-iam-roles-per-function
+  - serverless-export-env
+  - serverless-plugin-common-excludes
+  - serverless-appsync-plugin
+  - serverless-jetpack
+  - serverless-sequelize-migrations
+  - serverless-step-functions
+  - serverless-plugin-split-stacks
+  - serverless-plugin-lambda-insights
+  - serverless-stack-output
+  - ./custom-serverless-plugin/hook-event.js
+functions:
+  getCustomFilterExecutedQuery:
+    handler: functions/lambda-resolvers/custom-filter/get-executed-query.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/custom-filter/get-executed-query.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getCustomFilter:
+    handler: functions/lambda-resolvers/custom-filter/get-task-custom-filter.handler
+    environment:
+      GQ_APP_ID: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+      GQ_API_KEY: !GetAtt GraphqlApiKey.ApiKey
+      STAGE: ${opt:stage}
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action: dynamodb:*
+        Resource:
+          - !GetAtt CustomFilterDB.Arn
+  getTaskType:
+    handler: functions/lambda-resolvers/task/get-task-type.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/get-task-type.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  syncDatabase:
+    handler: functions/models/init-sequelize.initSequelize
+    environment:
+      SYNC: true
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+
+  pushLocationUpdates:
+    handler: functions/push-location-updates.handler
+    memorySize: 1024
+    timeout: 60
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    environment:
+      LOCATION_DB: !Ref LocationDB
+      GQ_APP_ID: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+      LOCATION_PUSH_API_KEY: !GetAtt GraphqlApiKeyLocation.ApiKey
+    iamRoleStatements:
+      - Effect: Allow
+        Action: dynamodb:*
+        Resource: !GetAtt LocationDB.Arn
+      - Effect: 'Allow'
+        Action:
+          - appsync:GraphQL
+        Resource:
+          - ${self:custom.GQAppARN}
+          - !Join ["/", ["${self:custom.GQAppARN}", 'types', 'Mutation', 'fields', 'updateAgentLocation']]
+
+  customUpdateEndpoint:
+    handler: functions/push-message/custom-update-endpoint.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    environment:
+      ENDPOINT_DB: !Ref EndpointDB
+    iamRoleStatements:
+      - Effect: Allow
+        Action: 'dynamodb:*'
+        Resource: !GetAtt EndpointDB.Arn
+
+  customAuditLogs:
+    handler: functions/audit-logs/create-audit-logs.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    environment:
+      AUDIT_LOGS_DB: !Ref AuditLogsDB
+    iamRoleStatements:
+      - Effect: Allow
+        Action: 'dynamodb:*'
+        Resource: !GetAtt AuditLogsDB.Arn
+
+  sendPushNotification:
+    handler: functions/push-message/send-push-message.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    environment:
+      ENDPOINT_DB: !Ref EndpointDB
+      # PUSH_ENDPOINT: !Join ["", ["https://", { Ref: PrivateAPIGatewayEndpoint }, '.execute-api.', { Ref: AWS::Region }, '.amazonaws.com/${opt:stage}/send-push']]
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action: 'dynamodb:*'
+        Resource: !GetAtt EndpointDB.Arn
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/push-message/send-push-message.js
+
+  catalogStreamHandler:
+    handler: functions/streams/tenant-account/tenant-account-stream.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+      BASE_DATA_LAMBDA_ARN: !GetAtt InitBaseDataLambdaFunction.Arn
+      UPDATE_POSTGRES_LAMBDA_ARN: !GetAtt UpdateTenantAtPostgresLambdaFunction.Arn
+      DEFAULT_USAGE_PLAN: ${self:custom.stackName}
+    events:
+      - stream:
+          type: dynamodb
+          arn: !GetAtt CatalogDB.StreamArn
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - dynamodb:*
+        Resource:
+          - !GetAtt CatalogDB.Arn
+          - !GetAtt AuditLogsDB.Arn
+      - Effect: 'Allow'
+        Action:
+          - mobiletargeting:SendMessages
+        Resource:
+          - "*"
+      - Effect: 'Allow'
+        Action:
+          - cognito-idp:*
+        Resource:
+          - "*"
+      - Effect: 'Allow'
+        Action:
+          - lambda:InvokeFunction
+        Resource:
+          - !GetAtt InitBaseDataLambdaFunction.Arn
+          - !GetAtt UpdateTenantAtPostgresLambdaFunction.Arn
+      - Effect: 'Allow'
+        Action:
+          - apigateway:*
+        Resource:
+          - "*"
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/streams/tenant-account/**
+        - functions/libs/**
+        - functions/models/**
+        - functions/lambda-resolvers/sequelize-middleware.js
+
+  verifyEmailHandler:
+    handler: functions/verify-email.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+      CLIENT_ID: !Ref WebClient
+      GQ_APP_ID: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+      STAGE: ${opt:stage}
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    events:
+      - http:
+          path: /verify/email
+          method: get
+          cors: true
+          private: false
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - dynamodb:*
+        Resource:
+          - !GetAtt CatalogDB.Arn
+      - Effect: 'Allow'
+        Action:
+          - appsync:GraphQL
+        Resource:
+          - ${self:custom.GQAppARN}
+          - !Join ["/", ["${self:custom.GQAppARN}", 'types', 'Mutation', 'fields', 'updateTenantAccountStatus']]
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/verify-email.js
+        - functions/libs/api-gateway-libs.js
+
+  getLocation:
+    handler: functions/lambda-resolvers/location/get-location.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/location/get-location.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getLocations:
+    handler: functions/lambda-resolvers/location/get-locations.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/location/get-locations.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  createLocation:
+    handler: functions/lambda-resolvers/location/create-location.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/location/create-location.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  deleteLocation:
+    handler: functions/lambda-resolvers/location/delete-location.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/location/delete-location.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  updateLocation:
+    handler: functions/lambda-resolvers/location/update-location.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/location/update-location.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/utils.js
+        - functions/libs/db-connector.js
+
+  apiCreateTasks:
+    handler: functions/api/create-task.handler
+    environment:
+      GQ_APP_ID: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+      GQ_API_KEY: !GetAtt GraphqlApiKey.ApiKey
+      STAGE: ${opt:stage}
+      LOCATION_FUNCTION: !GetAtt CreateLocationLambdaFunction.Arn
+      GOOGLE_MAPS_API_KEY: ${self:custom.environment.gmServerKey}
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    events:
+      - http:
+          path: /task
+          method: post
+          request:
+            schemas:
+              application/json:
+                schema: ${file(schemas/task_create_request.json)}
+                name: TaskCreateModel
+                description: 'Validation model for Creating Tasks'
+          cors: true
+          private: true
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:BatchGetItem
+          - dynamodb:Query
+          - dynamodb:Scan
+        Resource:
+          - !GetAtt CatalogDB.Arn
+          - !Join ["", [ !GetAtt CatalogDB.Arn, "/index/*"]]
+      - Effect: 'Allow'
+        Action:
+          - lambda:InvokeFunction
+        Resource:
+          - !GetAtt CreateLocationLambdaFunction.Arn
+      - Effect: 'Allow'
+        Action:
+          - appsync:GraphQL
+        Resource:
+          - ${self:custom.GQAppARN}
+          - !Join ["/", ["${self:custom.GQAppARN}", 'types', 'Mutation', 'fields', 'createTask']]
+          - !Join ["/", ["${self:custom.GQAppARN}", 'types', 'Query', 'fields', 'getLocation']]
+
+  apiCreateTasksCognitoAuth:
+    handler: functions/api/create-task.handler
+    environment:
+      GQ_APP_ID: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+      GQ_API_KEY: !GetAtt GraphqlApiKey.ApiKey
+      STAGE: ${opt:stage}
+      LOCATION_FUNCTION: !GetAtt CreateLocationLambdaFunction.Arn
+      GOOGLE_MAPS_API_KEY: ${self:custom.environment.gmServerKey}
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    events:
+      - http:
+          path: /task_batch
+          method: post
+          cors: true
+          authorizer:
+            name: CognitoAuthorizer
+            type: COGNITO_USER_POOLS
+            arn:
+              Fn::GetAtt:
+                - CognitoUserPool
+                - Arn
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:BatchGetItem
+          - dynamodb:Query
+          - dynamodb:Scan
+        Resource:
+          - !GetAtt CatalogDB.Arn
+          - !Join ["", [ !GetAtt CatalogDB.Arn, "/index/*"]]
+      - Effect: 'Allow'
+        Action:
+          - lambda:InvokeFunction
+        Resource:
+          - !GetAtt CreateLocationLambdaFunction.Arn
+      - Effect: 'Allow'
+        Action:
+          - appsync:GraphQL
+        Resource:
+          - ${self:custom.GQAppARN}
+          - !Join ["/", ["${self:custom.GQAppARN}", 'types', 'Mutation', 'fields', 'createTask']]
+          - !Join ["/", ["${self:custom.GQAppARN}", 'types', 'Query', 'fields', 'getLocation']]
+
+  apiCreateTaskType:
+    handler: functions/api/create-task-type.handler
+    environment:
+      STAGE: ${opt:stage}
+    events:
+      - http:
+          path: /taskType
+          method: post
+          request:
+            schemas:
+              application/json:
+                schema: ${file(schemas/taskType_create_request.json)}
+                name: TaskTypeCreateModel
+                description: 'Validation model for Creating Task Types'
+          cors: true
+          private: true
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/api/create-task-type.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+        - functions/libs/api-gateway-libs.js
+
+  apiGetTaskType:
+    handler: functions/api/get-task-type.handler
+    environment:
+      STAGE: ${opt:stage}
+    events:
+      - http:
+          path: /taskType/{id}
+          method: get
+          request:
+            parameters:
+              paths:
+                id: false
+          cors: true
+          private: true
+      - http:
+          path: /taskType
+          method: get
+          request:
+            parameters:
+              querystrings:
+                limit: false
+                offset: false
+          cors: true
+          private: true
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/api/get-task-type.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+        - functions/libs/api-gateway-libs.js
+
+  apiGetTeam:
+    handler: functions/api/get-team.handler
+    environment:
+      STAGE: ${opt:stage}
+    events:
+      - http:
+          path: /team/{id}
+          method: get
+          request:
+            parameters:
+              paths:
+                id: false
+          cors: true
+          private: true
+      - http:
+          path: /team
+          method: get
+          request:
+            parameters:
+              querystrings:
+                limit: false
+                offset: false
+          cors: true
+          private: true
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/api/get-team.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+        - functions/libs/api-gateway-libs.js
+
+  apiGetTask:
+    handler: functions/api/get-task.handler
+    environment:
+      STAGE: ${opt:stage}
+    events:
+      - http:
+          path: /task
+          method: get
+          request:
+            parameters:
+              querystrings:
+                limit: false
+                offset: false
+          cors: true
+          private: true
+      - http:
+          path: /task/{id}
+          method: get
+          request:
+            parameters:
+              paths:
+                id: false
+          cors: true
+          private: true
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/api/get-task.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+        - functions/libs/api-gateway-libs.js
+
+  apiGetTaskByDate:
+    handler: functions/api/get-task.handler
+    environment:
+      STAGE: ${opt:stage}
+    events:
+      - http:
+          path: /taskByDate/{dateField}/{from}/{to}
+          method: get
+          request:
+            parameters:
+              paths:
+                dateField: true
+                from: true
+                to: true
+          cors: true
+          private: true
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/api/get-task.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+        - functions/libs/api-gateway-libs.js
+
+  # createSegmentAPI:
+  #   handler: functions/create-segment.handler
+  #   events:
+  #     - http:
+  #         path: /private/segment
+  #         method: post
+  #         private: true
+
+  createTenantAccount:
+    handler: functions/lambda-resolvers/create-tenant-account.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action: dynamodb:*
+        Resource: !GetAtt CatalogDB.Arn
+      - Effect: Allow
+        Action: 'dynamodb:*'
+        Resource: !GetAtt AuditLogsDB.Arn
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/create-tenant-account.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  createSegment:
+    handler: functions/create-segment.handler
+    environment:
+      APP_ID: !Ref PinpointApp
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - mobiletargeting:*
+        Resource: '*'
+
+  pushNotificationsAgent:
+    handler: functions/send-push-notification.agentNotificationHandler
+    environment:
+      APP_ID: !Ref PinpointApp
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - mobiletargeting:*
+          - pinpoint:*
+        Resource: '*'
+
+  countTenantAccounts:
+    handler: functions/lambda-resolvers/count-tenant-accounts.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - dynamodb:*
+        Resource:
+          - !GetAtt CatalogDB.Arn
+          - !Join ["", [ !GetAtt CatalogDB.Arn, "/index/*"]]
+
+  getAgentActiveTasks:
+    handler: functions/lambda-resolvers/agent/get-agent-active-task.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/agent/get-agent-active-task.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  updateTenantInfo:
+    handler: functions/lambda-resolvers/tenant/update-tenant-info.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/tenant/update-tenant-info.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  createTaskType:
+    handler: functions/lambda-resolvers/task/create-task-type.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/create-task-type.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  createTaskInvite:
+    handler: functions/lambda-resolvers/task/create-task-invite.handler
+    timeout: 20
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    environment:
+      GQ_APP_ID: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+      GQ_API_KEY: !GetAtt GraphqlApiKey.ApiKey
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/create-task-invite.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  createTaskTenantInvite:
+    handler: functions/lambda-resolvers/task/create-task-tenant-invite.handler
+    timeout: 20
+    environment:
+      GQ_APP_ID: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+      GQ_API_KEY: !GetAtt GraphqlApiKey.ApiKey
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/create-task-tenant-invite.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  updateTaskType:
+    handler: functions/lambda-resolvers/task/update-task-type.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/update-task-type.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  createTaskStatusMessage:
+    handler: functions/lambda-resolvers/task/create-task-status-message.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/create-task-status-message.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  updateTaskStatusMessage:
+    handler: functions/lambda-resolvers/task/update-task-status-message.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/update-task-status-message.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  acceptTaskInvite:
+    handler: functions/lambda-resolvers/task/accept-task-invite.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/accept-task-invite.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  rejectTaskInvite:
+    handler: functions/lambda-resolvers/task/reject-task-invite.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/reject-task-invite.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  getInvitesByAgent:
+    handler: functions/lambda-resolvers/task/get-invites-by-agent.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/get-invites-by-agent.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getTaskStatusMessage:
+    handler: functions/lambda-resolvers/task/get-task-status-message.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/get-task-status-message.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  syncTable:
+    handler: functions/handler.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+
+  getSelfWebUserProfile:
+    handler: functions/lambda-resolvers/web-user/get-self-web-user-profile.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/web-user/get-self-web-user-profile.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getTeamAgents:
+    handler: functions/lambda-resolvers/team/get-team-agents.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    # package:
+    #   individually: true
+    #   exclude:
+    #     - "*/**"
+    #   include:
+    #     - functions/lambda-resolvers/team/get-team-agents.js
+    #     - functions/lambda-resolvers/sequelize-middleware.js
+    #     - functions/models/**
+    #     - functions/libs/db-connector.js
+
+  #function is backed by middleware
+  #expects body with tenant details
+  #creates base(seed) data for the tenant after receiving INIT_READY_WORK
+  initBaseData:
+    handler: functions/init-base-data.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+
+  #appsync vpc rds lambda resolvers starts from here
+  getTenantInfo:
+    handler: functions/lambda-resolvers/tenant/get-tenant-info.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/tenant/get-tenant-info.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  createTask:
+    handler: functions/lambda-resolvers/task/create-task.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/create-task.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  createTaskBulk:
+    handler: functions/lambda-resolvers/task/create-task-bulk.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/create-task-bulk.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+
+  getTaskStatus:
+    handler: functions/lambda-resolvers/task/get-tasks-status.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/get-tasks-status.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getTasks:
+    handler: functions/lambda-resolvers/task/get-tasks.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/get-tasks.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getTenantAgents:
+    handler: functions/lambda-resolvers/agent/get-tenant-agents.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/agent/get-tenant-agents.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getTasksByTeam:
+    handler: functions/lambda-resolvers/task/get-tasks-by-team.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/get-tasks-by-team.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  updateTask:
+    handler: functions/lambda-resolvers/task/update-task.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/update-task.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getTaskHistory:
+    handler: functions/lambda-resolvers/task/get-task-history.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/get-task-history.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  assignTeamToTask:
+    handler: functions/lambda-resolvers/task/assign-team-to-task.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/assign-team-to-task.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  assignAgentToTask:
+    handler: functions/lambda-resolvers/task/assign-agent-to-task.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+      # NOTIFICATION_SENDER_LAMBDA: !GetAtt SendPushNotificationLambdaFunction.Arn
+      # PUSH_ENDPOINT: !Join ["", ["https://", { Ref: PrivateAPIGatewayEndpoint }, '.execute-api.', { Ref: AWS::Region }, '.amazonaws.com/${opt:stage}/send-push']]
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    # iamRoleStatements:
+    #   - Effect: Allow
+    #     Action: 'lambda:InvokeAsync'
+    #     Resource: !GetAtt SendPushNotificationLambdaFunction.Arn
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/assign-agent-to-task.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  getAgentsTasks:
+    handler: functions/lambda-resolvers/task/get-agents-tasks.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/get-agents-tasks.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  deleteTaskType:
+    handler: functions/lambda-resolvers/task/delete-task-type.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/delete-task-type.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  deleteTaskStatusMessage:
+    handler: functions/lambda-resolvers/task/delete-task-status-message.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/delete-task-status-message.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  updateTaskStatusByAgent:
+    handler: functions/lambda-resolvers/task/update-task-status-by-agent.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/update-task-status-by-agent.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  updateTaskStatusByUser:
+    handler: functions/lambda-resolvers/task/update-task-status-by-user.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/update-task-status-by-user.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  updateAgentLocations:
+    handler: functions/lambda-resolvers/agent/update-locations.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+      GQ_APP_ID: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+
+  updateOwnWorkStatus:
+    handler: functions/lambda-resolvers/agent/update-own-work-status.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/agent/update-own-work-status.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getAgentsByTeamAndStatus:
+    handler: functions/lambda-resolvers/agent/get-agents-based-on-team-and-status.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/agent/get-agents-based-on-team-and-status.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getSelfAgentProfile:
+    handler: functions/lambda-resolvers/agent/get-self-agent-profile.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/agent/get-self-agent-profile.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getTeams:
+    handler: functions/lambda-resolvers/team/get-teams.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/team/get-teams.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+    tags:
+      group: appsync
+
+  getHubs:
+    handler: functions/lambda-resolvers/hub/get-hubs.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/hub/get-hubs.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  createHub:
+    handler: functions/lambda-resolvers/hub/create-hub.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/hub/create-hub.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  createTeam:
+    handler: functions/lambda-resolvers/team/create-team.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/team/create-team.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  getHub:
+    handler: functions/lambda-resolvers/hub/get-hub.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/hub/get-hub.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  getTeam:
+    handler: functions/lambda-resolvers/team/get-team.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/team/get-team.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  updateHub:
+    handler: functions/lambda-resolvers/hub/update-hub.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/hub/update-hub.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  deleteHub:
+    handler: functions/lambda-resolvers/hub/delete-hub.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/hub/delete-hub.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/utils.js
+        - functions/libs/db-connector.js
+
+  updateTeam:
+    handler: functions/lambda-resolvers/team/update-team.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/team/update-team.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  deleteTeam:
+    handler: functions/lambda-resolvers/team/delete-team.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/team/delete-team.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+    # createConnection:
+  #   handler: functions/lambda-resolvers/tenant/create-connection.handler
+  #   environment:
+  #     USERPOOL_ID: !Ref CognitoUserPool
+  #   layers:
+  #     - !Ref StaticLayerLambdaLayer
+  #     - ${self:custom.environment.lumigoLayerARN}
+  #     # - !Ref QuicklyCustomLibsLambdaLayer
+  #     # - !Ref QuicklyModelLibsLambdaLayer
+  #   vpc:
+  #     securityGroupIds:
+  #       - ${self:custom.securityGroupID}
+  #     subnetIds:
+  #       - ${self:custom.subnet1ID}
+  #       - ${self:custom.subnet2ID}
+  #   package:
+  #     individually: true
+  #     exclude:
+  #       - "*/**"
+  #     include:
+  #       - functions/lambda-resolvers/tenant/create-connection.js
+  #       - functions/lambda-resolvers/sequelize-middleware.js
+  #       - functions/models/**
+  #       - functions/libs/db-connector.js
+
+  # getConnections:
+  #   handler: functions/lambda-resolvers/tenant/get-tenant-connections.handler
+  #   environment:
+  #     USERPOOL_ID: !Ref CognitoUserPool
+  #   layers:
+  #     - !Ref StaticLayerLambdaLayer
+  #     - ${self:custom.environment.lumigoLayerARN}
+  #     # - !Ref QuicklyCustomLibsLambdaLayer
+  #     # - !Ref QuicklyModelLibsLambdaLayer
+  #   vpc:
+  #     securityGroupIds:
+  #       - ${self:custom.securityGroupID}
+  #     subnetIds:
+  #       - ${self:custom.subnet1ID}
+  #       - ${self:custom.subnet2ID}
+  #   package:
+  #     individually: true
+  #     exclude:
+  #       - "*/**"
+  #     include:
+  #       - functions/lambda-resolvers/tenant/get-tenant-connections.js
+  #       - functions/lambda-resolvers/sequelize-middleware.js
+  #       - functions/models/**
+  #       - functions/libs/db-connector.js
+
+  # updateConnection:
+  #   handler: functions/lambda-resolvers/tenant/update-connection.handler
+  #   environment:
+  #     USERPOOL_ID: !Ref CognitoUserPool
+  #   layers:
+  #     - !Ref StaticLayerLambdaLayer
+  #     - ${self:custom.environment.lumigoLayerARN}
+  #     # - !Ref QuicklyCustomLibsLambdaLayer
+  #     # - !Ref QuicklyModelLibsLambdaLayer
+  #   vpc:
+  #     securityGroupIds:
+  #       - ${self:custom.securityGroupID}
+  #     subnetIds:
+  #       - ${self:custom.subnet1ID}
+  #       - ${self:custom.subnet2ID}
+  #   package:
+  #     individually: true
+  #     exclude:
+  #       - "*/**"
+  #     include:
+  #       - functions/lambda-resolvers/tenant/update-connection.js
+  #       - functions/lambda-resolvers/sequelize-middleware.js
+  #       - functions/models/**
+  #       - functions/libs/db-connector.js
+  #       - functions/libs/utils.js
+
+  # deleteConnection:
+  #   handler: functions/lambda-resolvers/tenant/delete-connection.handler
+  #   environment:
+  #     USERPOOL_ID: !Ref CognitoUserPool
+  #   layers:
+  #     - !Ref StaticLayerLambdaLayer
+  #     - ${self:custom.environment.lumigoLayerARN}
+  #     # - !Ref QuicklyCustomLibsLambdaLayer
+  #     # - !Ref QuicklyModelLibsLambdaLayer
+  #   vpc:
+  #     securityGroupIds:
+  #       - ${self:custom.securityGroupID}
+  #     subnetIds:
+  #       - ${self:custom.subnet1ID}
+  #       - ${self:custom.subnet2ID}
+  #   package:
+  #     individually: true
+  #     exclude:
+  #       - "*/**"
+  #     include:
+  #       - functions/lambda-resolvers/tenant/delete-connection.js
+  #       - functions/lambda-resolvers/sequelize-middleware.js
+  #       - functions/models/**
+  #       - functions/libs/db-connector.js
+  #       - functions/libs/utils.js
+
+  createWebUser:
+    handler: functions/lambda-resolvers/web-user/create-web-user.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - cognito-idp:*
+        Resource:
+          - "*"
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/web-user/create-web-user.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/cognito-libs.js
+        - functions/lambda-resolvers/validate-auth-token-middleware.js
+
+  writeWebUserDB:
+    handler: functions/lambda-resolvers/web-user/write-web-user-db.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    # package:
+    #   individually: true
+    #   exclude:
+    #     - "*/**"
+    #   include:
+    #     - functions/lambda-resolvers/web-user/write-web-user-db.js
+    #     - functions/lambda-resolvers/sequelize-middleware.js
+    #     - functions/models/**
+    #     - functions/libs/db-connector.js
+
+  updateWebUser:
+    handler: functions/lambda-resolvers/web-user/update-web-user-cognito.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - cognito-idp:*
+        Resource:
+          - "*"
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/web-user/update-web-user-cognito.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/lambda-resolvers/validate-tenant-relation-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+        - functions/libs/cognito-libs.js
+
+  updateWebUserDB:
+    handler: functions/lambda-resolvers/web-user/update-web-user-db.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/web-user/update-web-user-db.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  cancelTask:
+    handler: functions/lambda-resolvers/task/cancel-task.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/task/cancel-task.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  updateAgentCognito:
+    handler: functions/lambda-resolvers/agent/update-agent-cognito.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - cognito-idp:*
+        Resource:
+          - "*"
+    # package:
+    #   individually: true
+    #   exclude:
+    #     - "*/**"
+    #   include:
+    #     - functions/lambda-resolvers/agent/update-agent-cognito.js
+    #     - functions/lambda-resolvers/sequelize-middleware.js
+    #     - functions/models/**
+    #     - functions/libs/db-connector.js
+
+  updateAgentAtDB:
+    handler: functions/lambda-resolvers/agent/update-agent-at-db.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    # package:
+    #   individually: true
+    #   exclude:
+    #     - "*/**"
+    #   include:
+    #     - functions/lambda-resolvers/agent/update-agent-at-db.js
+    #     - functions/lambda-resolvers/sequelize-middleware.js
+    #     - functions/models/**
+    #     - functions/libs/db-connector.js
+
+  getWebUsers:
+    handler: functions/lambda-resolvers/web-user/get-web-users.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/web-user/get-web-users.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  createAgent:
+    handler: functions/lambda-resolvers/agent/create-agent.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/agent/create-agent.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+        - functions/libs/utils.js
+
+  getAgents:
+    handler: functions/lambda-resolvers/agent/get-agents.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/agent/get-agents.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  updateTenantAtDynamoDB:
+    handler: functions/lambda-resolvers/tenant/update-tenant-at-dynamodb.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - dynamodb:*
+        Resource:
+          - "*"
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/tenant/update-tenant-at-dynamodb.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  updateTenantAtPostgres:
+    handler: functions/lambda-resolvers/tenant/update-tenant-at-postgres.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/tenant/update-tenant-at-postgres.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  testSequelizeQueries:
+    handler: functions/test-sequelize-queries.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+
+  getCustomData:
+    handler: functions/lambda-resolvers/get-custom-data.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    vpc:
+      securityGroupIds:
+        - ${self:custom.securityGroupID}
+      subnetIds:
+        - ${self:custom.subnet1ID}
+        - ${self:custom.subnet2ID}
+
+  waSendMessage:
+    handler: functions/event-handlers/wa/wa-send-message.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+      WA_accessToken: ${self:custom.environment.waAccessToken}
+      WA_SenderPhoneNumberId: ${self:custom.environment.waSenderPhoneId}
+      WA_wabaId: ${self:custom.environment.waWabaId}
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    events:
+      - sqs:
+          arn: !GetAtt WaSendMessageSqs.Arn
+          batchSize: 5
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/event-handlers/wa/msg_parser.js
+        - functions/event-handlers/wa/index.js
+        - functions/event-handlers/wa/wa-send-message.js
+        - functions/event-handlers/wa/node_modules/**
+
+  waReceiveMessage:
+    handler: functions/event-handlers/wa-receive-message.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    events:
+      - sqs:
+          arn: !GetAtt WaReceiveMessageSqs.Arn
+          batchSize: 5
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/event-handlers/wa-receive-message.js
+
+  emailSendMessage:
+    handler: functions/event-handlers/email/email-send-message.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    events:
+      - sqs:
+          arn: !GetAtt EmailSendMessageSqs.Arn
+          batchSize: 5
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - dynamodb:*
+        Resource:
+          - !GetAtt CatalogDB.Arn
+      - Effect: 'Allow'
+        Action:
+          - mobiletargeting:SendMessages
+        Resource:
+          - "*"
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/event-handlers/email/email-send-message.js
+        - functions/libs/pinpoint-utility.js
+        - functions/event-handlers/email/**
+
+  ###################Auto-Assignment-related Functions######################
+  getAgentsFunction:
+    handler: functions/auto-assignment/getAgents.handler
+    memorySize: 128
+    timeout: 10
+    architecture: arm64
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+      GQ_API_KEY: !GetAtt GraphqlApiKey.ApiKey
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - appsync:GraphQL
+        Resource:
+          - ${self:custom.GQAppARN}
+          - !Join ["/", ["${self:custom.GQAppARN}", 'types', 'Query', 'fields', 'getTenantAgents']]
+
+  callGisModelFunction:
+    handler: functions/auto-assignment/gisAllocationModel.submit
+    memorySize: 128
+    timeout: 15
+    architecture: arm64
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+      HERE_API: tXh27_vfWnIhPk66ORdM-2_cKTly0btXyhgVi6yKX88
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+
+  notifyAgentsFunction:
+    handler: functions/auto-assignment/notifyAgents.handler
+    memorySize: 128
+    timeout: 30
+    architecture: arm64
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+      GQ_API_KEY: !GetAtt GraphqlApiKey.ApiKey
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - appsync:GraphQL
+        Resource:
+          - ${self:custom.GQAppARN}
+          - !Join ["/", ["${self:custom.GQAppARN}", 'types', 'Mutation', 'fields', 'CreateTaskInvite']]
+
+  checkTaskStatusFunction:
+    handler: functions/auto-assignment/checkTasksStatus.handler
+    memorySize: 128
+    timeout: 10
+    architecture: arm64
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+      GQ_API_KEY: !GetAtt GraphqlApiKey.ApiKey
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - appsync:GraphQL
+        Resource:
+          - ${self:custom.GQAppARN}
+          - !Join ["/", ["${self:custom.GQAppARN}", 'types', 'Query', 'fields', 'getTaskStatus']]
+
+
+  ###################Cognito Generic Functions######################
+  createCognitoUser:
+    handler: functions/lambda-resolvers/cognito/create-new-user-service.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - cognito-idp:*
+        Resource:
+          - "*"
+
+  ###################Cognito Hooks######################
+  preAuthenticationHook:
+    handler: functions/lambda-resolvers/cognito/pre-authentication-hook.handler
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    # environment:
+    #   USERPOOL_ID: !Ref CognitoUserPool
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - cognito-idp:*
+        Resource:
+          - "*"
+      - Effect: 'Allow'
+        Action:
+          - dynamodb:*
+        Resource:
+          - "*"
+
+
+  updateTenantAccountMutation:
+    handler: functions/update-tenant-account-status-mutation.handler
+    environment:
+      CLIENT_ID: !Ref WebClient
+      GQ_APP_ID: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+      GQ_APP_URL: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+    layers:
+      - !Ref StaticLayerLambdaLayer
+      - ${self:custom.environment.lumigoLayerARN}
+      # - !Ref QuicklyCustomLibsLambdaLayer
+      # - !Ref QuicklyModelLibsLambdaLayer
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - cognito-idp:*
+        Resource:
+          - "*"
+      - Effect: 'Allow'
+        Action:
+          - dynamodb:*
+        Resource:
+          - "*"
+      - Effect: 'Allow'
+        Action:
+          - appsync:GraphQL
+        Resource:
+          - ${self:custom.GQAppARN}
+          - !Join ["/", ["${self:custom.GQAppARN}", 'types', 'Mutation', 'fields', 'updateTenantAccountStatus']]
+    package:
+      individually: true
+      exclude:
+        - "*/**"
+      include:
+        - functions/lambda-resolvers/web-user/get-web-users.js
+        - functions/lambda-resolvers/sequelize-middleware.js
+        - functions/models/**
+        - functions/libs/db-connector.js
+
+  ########################################################################
+  #                     Generic Service functions
+  ########################################################################
+  createNewCognitoUser:
+    handler: functions/services/create-new-cognito-user.handler
+    environment:
+      USERPOOL_ID: !Ref CognitoUserPool
+
+stepFunctions:
+  ${file(resources/stepfunction/autoassignment.yml)}
+
+resources:
+  Conditions:
+    CreateNewPipeline:
+      !Equals
+        - ${self:custom.environment.isPipeline}
+        - true
+
+  Resources:
+    #cognito
+    CognitoUserPool:
+      ${file(resources/cognito/userpool.yml)}
+
+    PreAuthHookPermission:
+      ${file(resources/cognito/pre-auth-hook-invoke-permission.yml)}
+
+    WebClient:
+      ${file(resources/cognito/app-client.yml)}
+
+    UserPoolDomain:
+      ${file(resources/cognito/userpool-domain.yml)}
+
+    QuicklySuperAdminGroup:
+      ${file(resources/cognito/quickly-super-admin-group.yml)}
+
+    TenantAdminGroup:
+      ${file(resources/cognito/quickly-tenant-admin-group.yml)}
+
+    TenantWebUserGroup:
+      ${file(resources/cognito/quickly-tenant-web-user-group.yml)}
+
+    TenantDriverGroup:
+      ${file(resources/cognito/quickly-tenant-driver-group.yml)}
+
+    IdentityPool:
+      ${file(./resources/cognito/identitypool.yml)}
+
+    IdentityPoolRoleMapper:
+      ${file(./resources/cognito/identitypool-role-mapper.yml)}
+
+    IdentityPoolAuthRole:
+      ${file(./resources/iam/identitypool-auth-role.yml)}
+
+    IdentityPoolUnAuthRole:
+      ${file(./resources/iam/identitypool-unauth-role.yml)}
+
+    ApiGatewayToSnsRole:
+      ${file(./resources/iam/apigw-sns-role.yml)}
+
+    #dynamodb tables
+    CatalogDB:
+      ${file(resources/dynamodb/catalog-db.yml)}
+
+    #dynamodb tables
+    EndpointDB:
+      ${file(resources/dynamodb/endpoint-db.yml)}
+
+    #dynamodb tables
+    AuditLogsDB:
+      ${file(resources/dynamodb/audit-logs-db.yml)}
+
+    CustomFilterDB:
+      ${file(resources/dynamodb/custom-filter-db.yml)}
+
+    RouteDB:
+      ${file(resources/dynamodb/route-db.yml)}
+
+    #dynamodb
+    LocationDB:
+      ${file(resources/dynamodb/location-db.yml)}
+
+    #appsync logs permissions
+    AppSyncLoggingServiceRole:
+      ${file(resources/iam/appsync-logging-permissions.yml)}
+
+    CognitoSMSRole:
+      ${file(resources/iam/sms-configuration-cognito.yml)}
+
+    PinpointApp:
+      ${file(resources/pinpoint/pinpoint-app.yml)}
+
+    PinpointEmailChannel:
+      ${file(resources/pinpoint/pinpoint-email-channel.yml)}
+    
+    PinpointEmailTemplate:
+      ${file(resources/pinpoint/pinpoint-email-template-init-email-validation.yml)}
+
+    #sqs resources
+    NotificationsDlq:
+      ${file(resources/sqs/notifications-dlq-sqs.yml)}
+
+    WaSendMessageSqs:
+      ${file(resources/sqs/wa-send-sqs.yml)}
+
+    WaReceiveMessageSqs:
+      ${file(resources/sqs/wa-receive-sqs.yml)}
+
+    EmailSendMessageSqs:
+      ${file(resources/sqs/email-send-sqs.yml)}
+
+    #sns resources
+    TaskEventsTopic:
+      ${file(resources/sns/tasks-sns.yml)}
+
+    TaskEventsTopicWaSendSubscription:
+      ${file(resources/sns/tasks-sns-wa-send-subscription.yml)}
+
+    TaskEventsTopicEmailSendSubscription:
+      ${file(resources/sns/tasks-sns-email-send-subscription.yml)}
+
+    WebhooksTopic:
+      ${file(resources/sns/webhooks-sns.yml)}
+
+    WaSendSnsToSqsPolicy:
+      ${file(resources/sqs/wa-send-sns-to-sqs-policy.yml)}
+
+    WaReceiveSnsToSqsPolicy:
+      ${file(resources/sqs/wa-receive-sns-to-sqs-policy.yml)}
+
+    EmailSendSnsToSqsPolicy:
+      ${file(resources/sqs/email-send-sns-to-sqs-policy.yml)}
+
+    #api-gateway resources
+    HttpApi:
+      ${file(resources/api-gateway/http-api.yml)}
+
+    HttpApiAuthorizer:
+      ${file(resources/api-gateway/http-api-authorizer.yml)}
+
+    HttpApiIntegration:
+      ${file(resources/api-gateway/http-api-integration.yml)}
+
+    HttpApiRoute:
+      ${file(resources/api-gateway/http-api-route.yml)}
+
+    HttpApiStage:
+      ${file(resources/api-gateway/http-api-stage.yml)}
+
+    HttpApiLambdaInvokePermission:
+      ${file(resources/api-gateway/http-api-lambda-invoke-permission.yml)}
+
+    PrivateAPIGatewayEndpoint:
+      Type: AWS::ApiGateway::RestApi
+      Properties:
+        Name: quickly-private-rest-api-${opt:stage}
+        EndpointConfiguration:
+          Types:
+            - PRIVATE
+          VpcEndpointIds:
+            - ${self:custom.vpcEndpointID}
+        Policy:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Deny
+              Principal: "*"
+              Action: "execute-api:Invoke"
+              Resource: !Join ["", ["arn:aws:execute-api:", { Ref: AWS::Region }, ":", { Ref: AWS::AccountId }, ":", "*/*/*/*" ]] #"arn:aws:execute-api:us-east-1:606435793259:nquua1v4z4/*/*/*"
+              Condition:
+                StringNotEquals:
+                  "aws:sourceVpc": ${self:custom.sourceVPCID}
+            - Effect: Allow
+              Principal: "*"
+              Action: "execute-api:Invoke"
+              Resource: !Join ["", ["arn:aws:execute-api:", { Ref: AWS::Region }, ":", { Ref: AWS::AccountId }, ":", "*/*/*/*" ]]
+
+    PrivateAPIGatewaySendPushResource:
+      Type: AWS::ApiGateway::Resource
+      Properties:
+        ParentId: !GetAtt PrivateAPIGatewayEndpoint.RootResourceId
+        PathPart: send-push
+        RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+    PrivateAPIGatewaySendPushMethod:
+      Type: AWS::ApiGateway::Method
+      Properties:
+        HttpMethod: POST
+        AuthorizationType: "NONE"
+        RequestParameters:
+          method.request.header.InvocationType: true
+        MethodResponses:
+          - StatusCode: "200"
+            ResponseModels:
+              "application/json": "Empty"
+        Integration:
+          IntegrationHttpMethod: POST
+          Type: AWS
+          Uri: !Join ["", ["arn:aws:apigateway:", { Ref: AWS::Region }, ':lambda:path/2015-03-31/functions/', !GetAtt SendPushNotificationLambdaFunction.Arn, "/invocations"]]
+          RequestParameters:
+            integration.request.header.X-Amz-Invocation-Type: method.request.header.InvocationType
+          IntegrationResponses:
+            - StatusCode: "200"
+          PassthroughBehavior: "WHEN_NO_TEMPLATES"
+        ResourceId: !Ref PrivateAPIGatewaySendPushResource
+        RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+    PrivateAPIGatewayAuditLogsResource:
+      Type: AWS::ApiGateway::Resource
+      Properties:
+        ParentId: !GetAtt PrivateAPIGatewayEndpoint.RootResourceId
+        PathPart: audit-logs
+        RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+    PrivateAPIGatewayAuditLogsMethod:
+      Type: AWS::ApiGateway::Method
+      Properties:
+        HttpMethod: POST
+        AuthorizationType: "NONE"
+        RequestParameters:
+          method.request.header.InvocationType: true
+        MethodResponses:
+          - StatusCode: "200"
+            ResponseModels:
+              "application/json": "Empty"
+        Integration:
+          IntegrationHttpMethod: POST
+          Type: AWS
+          Uri: !Join ["", ["arn:aws:apigateway:", { Ref: AWS::Region }, ':lambda:path/2015-03-31/functions/', !GetAtt CustomAuditLogsLambdaFunction.Arn, "/invocations"]]
+          RequestParameters:
+            integration.request.header.X-Amz-Invocation-Type: method.request.header.InvocationType
+          IntegrationResponses:
+            - StatusCode: "200"
+          PassthroughBehavior: "WHEN_NO_TEMPLATES"
+        ResourceId: !Ref PrivateAPIGatewayAuditLogsResource
+        RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+    PrivateAPIGatewayTaskEventsResource:
+      Type: AWS::ApiGateway::Resource
+      Properties:
+        ParentId: !GetAtt PrivateAPIGatewayEndpoint.RootResourceId
+        PathPart: task-events
+        RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+    PrivateAPIGatewayTaskEventsMethod:
+      Type: AWS::ApiGateway::Method
+      Properties:
+        HttpMethod: POST
+        AuthorizationType: "NONE"
+        RequestParameters:
+          method.request.header.InvocationType: true
+        MethodResponses:
+          - StatusCode: "200"
+            ResponseModels:
+              "application/json": "Empty"
+        Integration:
+          IntegrationHttpMethod: POST
+          Type: AWS
+          Credentials: !GetAtt ApiGatewayToSnsRole.Arn
+          Uri: !Join ["", ["arn:aws:apigateway:", { Ref: AWS::Region }, ':sns:path//']]
+          RequestParameters:
+            integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
+          RequestTemplates:
+            application/json: !Join ["", ["Action=Publish&TopicArn=$util.urlEncode('", !Ref TaskEventsTopic, "')&MessageAttributes.entry.1.Name=$util.urlEncode('entity')&MessageAttributes.entry.1.Value.DataType=$util.urlEncode('String')&MessageAttributes.entry.1.Value.StringValue=$util.urlEncode($input.path('$.attributes').entity)&MessageAttributes.entry.2.Name=$util.urlEncode('event')&MessageAttributes.entry.2.Value.DataType=$util.urlEncode('String')&MessageAttributes.entry.2.Value.StringValue=$util.urlEncode($input.path('$.attributes').event)&MessageAttributes.entry.3.Name=$util.urlEncode('notifications')&MessageAttributes.entry.3.Value.DataType=$util.urlEncode('String.Array')&MessageAttributes.entry.3.Value.StringValue=$util.urlEncode($input.path('$.attributes').notifications)&Message=$util.urlEncode($input.body)"]]
+          IntegrationResponses:
+            - StatusCode: "200"
+          PassthroughBehavior: "WHEN_NO_TEMPLATES"
+        ResourceId: !Ref PrivateAPIGatewayTaskEventsResource
+        RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+    WaMessageCallbackResource:
+      Type: AWS::ApiGateway::Resource
+      Properties:
+        ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+        PathPart: webhook
+        RestApiId: !Ref ApiGatewayRestApi
+
+    WaMessageCallbackMethod:
+      Type: AWS::ApiGateway::Method
+      Properties:
+        HttpMethod: POST
+        AuthorizationType: "NONE"
+        RequestParameters:
+          method.request.header.InvocationType: true
+        MethodResponses:
+          - StatusCode: "200"
+            ResponseModels:
+              "application/json": "Empty"
+        Integration:
+          IntegrationHttpMethod: POST
+          Type: AWS
+          Credentials: !GetAtt ApiGatewayToSnsRole.Arn
+          Uri: !Join ["", ["arn:aws:apigateway:", { Ref: AWS::Region }, ':sns:path//']]
+          RequestParameters:
+            integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
+          RequestTemplates:
+            application/json: !Join ["", ["Action=Publish&TopicArn=$util.urlEncode('", !Ref WebhooksTopic, "')&Message=$util.urlEncode($input.body)"]]
+          IntegrationResponses:
+            - StatusCode: "200"
+          PassthroughBehavior: "WHEN_NO_TEMPLATES"
+        ResourceId: !Ref WaMessageCallbackResource
+        RestApiId: !Ref ApiGatewayRestApi
+
+    WaMessageCallbackVerificationMethod:
+      Type: AWS::ApiGateway::Method
+      Properties:
+        HttpMethod: GET
+        AuthorizationType: "NONE"
+        MethodResponses:
+          - StatusCode: "200"
+        Integration:
+          Type: MOCK
+          RequestTemplates:
+            application/json: '#set($context.requestOverride.path.body = $input.params())
+                              {
+                                "statusCode": 200
+                              }'
+          IntegrationResponses:
+            - StatusCode: "200"
+              ResponseTemplates:
+                application/json: '#set($body = $context.requestOverride.path.body.querystring.get("hub.challenge"))
+                                  $body'
+          PassthroughBehavior: "WHEN_NO_TEMPLATES"
+        ResourceId: !Ref WaMessageCallbackResource
+        RestApiId: !Ref ApiGatewayRestApi
+
+    PrivateAPIGatewayAutoAssignmentResource:
+      Type: AWS::ApiGateway::Resource
+      Properties:
+        ParentId: !GetAtt PrivateAPIGatewayEndpoint.RootResourceId
+        PathPart: auto-assignment
+        RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+    PrivateAPIGatewayAutoAssignmentMethod:
+      Type: AWS::ApiGateway::Method
+      Properties:
+        ResourceId: !Ref PrivateAPIGatewayAutoAssignmentResource
+        RestApiId: !Ref PrivateAPIGatewayEndpoint
+        HttpMethod: POST
+        AuthorizationType: "NONE"
+        MethodResponses:
+          - StatusCode: "200"
+            ResponseModels:
+              "application/json": "Empty"
+        Integration:
+          IntegrationHttpMethod: POST
+          Type: HTTP
+          Uri: ${self:custom.environment.apiGwCustomDomain}/task/autoassigment
+          IntegrationResponses:
+            - StatusCode: "200"
+
+    PrivateAPIGatewayStage:
+      Type: AWS::ApiGateway::Stage
+      Properties:
+        RestApiId: !Ref PrivateAPIGatewayEndpoint
+        StageName: ${opt:stage}
+        TracingEnabled: true
+        DeploymentId: !Ref PrivateAPIGatewayDeployment202211021000
+
+    PrivateAPIGatewayDeployment:
+      DependsOn: PrivateAPIGatewaySendPushMethod
+      Type: AWS::ApiGateway::Deployment
+      Properties:
+        RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+    # Require to force deployment when a new resource/method is defined
+    # See https://medium.com/@lancers/deployment-in-amazon-api-gateway-128c522c762e
+    PrivateAPIGatewayDeployment202211021000:
+      DependsOn: PrivateAPIGatewaySendPushMethod
+      Type: AWS::ApiGateway::Deployment
+      Properties:
+        RestApiId: !Ref PrivateAPIGatewayEndpoint
+
+
+    PrivateAPIGatewaySendPushInvokePermission:
+      Type: AWS::Lambda::Permission
+      Properties:
+        Action: lambda:InvokeFunction
+        FunctionName: !GetAtt SendPushNotificationLambdaFunction.Arn
+        Principal: 'apigateway.amazonaws.com'
+        SourceArn: !Join ["", ["arn:aws:execute-api:", { Ref: AWS::Region }, ':', { Ref: AWS::AccountId }, ':', { Ref: PrivateAPIGatewayEndpoint }, "/*/*/*" ]]
+
+    PrivateAPIGatewayAuditLogsInvokePermission:
+      Type: AWS::Lambda::Permission
+      Properties:
+        Action: lambda:InvokeFunction
+        FunctionName: !GetAtt CustomAuditLogsLambdaFunction.Arn
+        Principal: apigateway.amazonaws.com
+        SourceArn: !Join ["", ["arn:aws:execute-api:", { Ref: AWS::Region }, ':', { Ref: AWS::AccountId }, ':', { Ref: PrivateAPIGatewayEndpoint }, "/*/*/*" ]]
+
+    GraphqlApiKey:
+      Type: AWS::AppSync::ApiKey
+      Properties:
+        ApiId: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+        Description: Internal usage
+        Expires: ${self:custom.appSyncKeyExpiry}
+
+    GraphqlApiKeyLocation:
+      Type: AWS::AppSync::ApiKey
+      Properties:
+        ApiId: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+        Description: API Key for updating location data from mobile app!
+        Expires: ${self:custom.appSyncKeyExpiry}
+
+    AutoAssignmentStepFunctionLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: TaskAutoAssignmentStateMachine-${opt:stage}
+        RetentionInDays: 30
+
+    S3DataBucket:
+      ${file(resources/s3/quickly-task-assets-bucket.yml)}
+
+    S3DataBucketPolicy:
+      ${file(resources/s3/quickly-task-assets-bucket-policy.yml)}
+
+    DeployBucket:
+      ${file(resources/pipeline/deploymentbucket.yml)}
+
+    CodePipelineServiceRole:
+      ${file(resources/pipeline/codepipeline_role.yml)}
+
+    CodeBuild:
+      ${file(resources/pipeline/codebuild.yml)}
+
+    CodePipeline:
+      ${file(resources/pipeline/codepipeline.yml)}
+
+    AmazonCloudWatchEventRole:
+      ${file(resources/pipeline/cw-event-role.yml)}
+
+    AmazonCloudWatchEventRule:
+      ${file(resources/pipeline/cw-event-rule.yml)}
+
+  Outputs:
+    stage:
+      Value: ${opt:stage}
+    UserPoolID:
+      Description: The cognito userpool ID
+      Value: !Ref CognitoUserPool
+    UserPoolClientID:
+      Description: The cognito userpool client ID
+      Value: !Ref WebClient
+    GQAppID:
+      Description: 'testing'
+      Value: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.ApiId
+    GQAppURL:
+      Description: 'testing'
+      Value: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.GraphQLUrl
+    GQAppARN:
+      Description: 'testing'
+      Value: !GetAtt Quicklyappsyncbe${opt:stage}GraphQlApi.Arn
+    RedirectURL:
+      Description: "property is required to configure postman OAuth server"
+      Value: ${self:custom.environment.OAuthRedirect}
+    LocationUpdates:
+      Description: "mobile app can use this with location plugin as a server url"
+      Value: !Join ["", ["https://", { Ref: HttpApi }, '.execute-api.', { Ref: AWS::Region }, '.amazonaws.com']] #https://skrcnh8hq5.execute-api.us-east-1.amazonaws.com
+    AuthURL:
+      Description: "property is required to configure postman OAuth server"
+      Value: !Join ["", ["https://", "${self:custom.environment.OAuthDomain}-${opt:stage}", ".auth.", { Ref: AWS::Region }, ".amazoncognito.com/login?client_id=", { Ref: WebClient }, "&response_type=token&scope=email+openid+phone+profile&redirect_uri=", "${self:custom.environment.OAuthRedirect}"]]
+    PinpointApp:
+      Description: Pinpoint App
+      Value: !Ref PinpointApp
+    IdentityPool:
+      Description: IdentityPool
+      Value: !Ref IdentityPool
+    AppSyncApiKey:
+      Description: AppSync APiKEy
+      Value: !Ref GraphqlApiKey

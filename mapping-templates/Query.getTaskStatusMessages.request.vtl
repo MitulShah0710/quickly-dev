@@ -1,0 +1,12 @@
+#set( $tenant_HASH = $ctx.identity.claims.get("custom:TENANT_HASH"))
+#set( $requester = $ctx.identity.username )
+{
+    "version": "2017-02-28",
+    "operation": "Invoke",
+    "payload": {
+        "field": "getTaskStatusMessages",
+        "arguments":  $utils.toJson($context.arguments),
+        "tenantHash": $utils.toJson($tenant_HASH),
+        "requesterUser": $util.toJson($requester)
+    }
+}

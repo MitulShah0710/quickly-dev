@@ -1,0 +1,14 @@
+#set( $userId = $ctx.identity.username )
+{
+    "version" : "2017-02-28",
+    "operation" : "PutItem",
+    "key": {
+        "filterId" : $util.dynamodb.toDynamoDBJson($util.autoId())   
+    },
+    "attributeValues" : {
+        "userId" : $util.dynamodb.toDynamoDBJson($userId),
+        "filterName" : $util.dynamodb.toDynamoDBJson($ctx.args.input.filterName),
+        "createdAt" : $util.dynamodb.toDynamoDBJson($ctx.args.input.createdAt),
+        "filterContent" : $util.dynamodb.toDynamoDBJson($ctx.args.input.filterContent)
+    }
+}

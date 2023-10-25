@@ -1,0 +1,410 @@
+schema {
+    query: Query
+    mutation: Mutation
+	subscription: Subscription
+}
+
+type Query {
+    getTasks(limit: Int, offset: Int, taskID: String): TaskConnections
+    @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+    getTaskHistory(taskID: String!): [TaskHistory]
+    @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+    getTasksByTeam(teamID: [String!]!, dateFilter: DateFilter, status: TaskStatus, agentID: String, orderID: String): TaskConnections
+	@aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+    getTaskTypes(limit: Int, offset: Int, taskID: String): TaskTypeConnection
+    @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin", "TenantDriver"])
+
+    getTaskStatusMessages(
+		limit: Int,
+		offset: Int,
+		messageID: String,
+		taskTypeID: String!,
+		status: String!,
+		languageCode: String!
+	): MessageConnection
+		@aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin", "TenantDriver"])
+
+	getInvitesByAgent: [TaskInvite]
+	@aws_cognito_user_pools(cognito_groups: ["TenantDriver"])
+
+	getTaskStatus(tenantID: String!, teamID: String, taskID: String!): Task
+	@aws_api_key
+
+	getCustomData(v1: String!, v2: String!): String
+    @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin", "SuperAdmin"])
+
+	getTasksByCustomFilter(filterId: String): TaskConnections
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+}
+
+type TaskTypeConnection {
+    taskTypes: [TaskType]
+    count: Int
+    total: Int
+}
+
+type MessageConnection {
+    messages: [Message],
+    count: Int
+}
+
+type Mutation {
+    createTaskInvite(taskID: String!, agentID: [String!]!): TaskInvite
+    @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+	#function will be called from step function
+	#produces same output as createTaskInvite but expects TenantID as input param
+	createTaskTenantInvite(taskID: String!, agentID: [String!], teamID: String, tenantID: String!): TaskInvite
+    @aws_api_key
+
+    createTask(info: TaskCreateInput, tenant: String): Task!
+    @aws_api_key @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+	createTaskBulk(info: [TaskCreateInput], tenant: String): [Task]!
+    @aws_api_key @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+    assignTeamToTask(taskID: String!, teamID: String!): Task!
+    @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+    assignAgentToTask(taskID: String!, agentID: String!): Task!
+    @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+    updateTaskStatusByAgent(taskID: String!, newStatus: TaskStatus!, latLongs: locationLatLongs, location: String, comment: String, deliveryInfo: DeliveryInfo): Task!
+    @aws_cognito_user_pools(cognito_groups: ["TenantDriver"])
+
+	updateTaskStatusByUser(taskID: String!, newStatus: TaskStatus!, comment: String, tenantID: String): Task!
+    @aws_api_key @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+
+	updateTask(taskID: String!, updateFields: TaskUpdateInput): Task!
+	@aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+    # updateTask( taskID: String!, rescheduleInput: RescheduleInput, taskDetailInput: TaskDetailInput ): Task!
+    # @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+    createTaskType( name: String!, isDelivery: Boolean!, items: [String] ): TaskType!
+    @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+    updateTaskType( ID: String! name: String, isDelivery: Boolean, items: [String] ): TaskType!
+    @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+	deleteTaskType( ID: String! ): Boolean!
+	@aws_cognito_user_pools(cognito_groups: ["TenantWebUser", "TenantAdmin"])
+
+
+
+    createTaskStatusMessage(
+		language: String!,
+		taskStatus: String!,
+        taskTypeID: String!
+		reason: String!,
+		displayOrderNo: Int!
+	): Message
+		@aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+    updateTaskStatusMessage( language: String, taskStatus: String, reason: String, displayOrderNo: Int, messageID: String!): Message
+    @aws_cognito_user_pools(cognito_groups: ["TenantWebUser","TenantAdmin"])
+
+	deleteTaskStatusMessage( ID: String! ): Boolean!
+	@aws_cognito_user_pools(cognito_groups: ["TenantWebUser", "TenantAdmin"])
+
+	acceptTaskInvite(inviteID: String!): Task!
+		@aws_cognito_user_pools(cognito_groups: ["TenantDriver"])
+
+	rejectTaskInvite(inviteID: String!): Boolean!
+		@aws_cognito_user_pools(cognito_groups: ["TenantDriver"])
+
+	cancelTask(taskID: String!): Task!
+		@aws_cognito_user_pools(cognito_groups: ["TenantWebUser", "TenantAdmin"])
+}
+
+input DeliveryInfo {
+    deliverySignature: String
+    deliveryPhoto: String
+    deliveryComment: String
+}
+
+input RescheduleInput {
+    plannedDate: String!
+}
+
+input TaskDetailInput {
+    taskType: String
+    taskMode: TaskMode
+	orderID: String
+	orderPlacedOn: String
+	groupTask: Boolean
+}
+
+type Subscription {
+    agentAssignedOnTask(AgentID: String!): Task
+		@aws_subscribe(mutations: ["assignAgentToTask","createTask", "acceptTaskInvite"])
+
+    teamAssignedOnTask(TeamID: String): Task
+		@aws_subscribe(mutations: ["assignTeamToTask"])
+
+    agentInvitedOnTask(agentID: String!): TaskInvite
+		@aws_subscribe(mutations: ["createTaskInvite", "createTaskTenantInvite"])
+
+	taskChangesForTeam(TeamID: String!): Task
+		@aws_subscribe(mutations: ["createTask", "assignTeamToTask", "assignAgentToTask",
+		"updateTaskStatusByAgent", "updateTask", "acceptTaskInvite", "cancelTask",
+		"updateTaskStatusByUser"])
+
+	taskUpdatedByUser(AgentID: String!): Task
+		@aws_subscribe(mutations: ["updateTaskStatusByUser", "cancelTask"])
+}
+
+type TaskInvite @aws_api_key
+@aws_cognito_user_pools {
+    ID: ID!
+    TaskID: String!
+    agentID: [String!]!
+    createdBy: String
+	createdAt: String
+	updatedBy: String
+	updatedAt: String
+    Task: Task
+	rejectedBy: [String]
+}
+
+# taskDescription maps to Task name in the UI
+# additionalInfo maps to Take instructions in the UI
+type Task @aws_api_key
+@aws_cognito_user_pools {
+	ID: ID!
+	AgentID: String
+	TeamID: String
+	taskType: String
+	TaskType: TaskType
+	TaskTypeID: String
+	isDelivery: Boolean
+	taskMode: TaskMode
+	priority: Priority
+	value: Float
+	completedOn: String
+	ratingByAgent: Int
+	commentsByAgent: String
+	customerName: String
+	customerEmail: String
+	customerPhone: String
+	customerAddress: String
+	customerLatLongs: LatLongs
+	taskDescription: String
+	taskDetails: [TaskDetail]
+	taskStatus: TaskStatus
+	pickupAddress: String
+	pickupLatLongs: LatLongs
+	deliveryAddress: String
+	deliveryPhoto: String
+	deliverySignature: String
+    deliveryComment: String
+	Agent: Agent
+	WebUser: WebUser
+	Team: Team
+	allowEdit: Boolean
+	createdBy: String
+	createdAt: String
+	updatedBy: String
+	updatedAt: String
+	origin: String
+	executor: String
+	serviceTime: [String]
+	visitDate: String
+	visitTimeWindow: [String]
+	isCompeted: Boolean
+	weight: Float
+	additionalInfo: String
+	TaskHistories: [TaskHistory]
+	requestedDate: String
+	plannedDate: String
+	deliveryDate: String
+	pickupName: String
+	pickupPhone: String
+	pickupEmail: String
+	orderID: String
+	orderPlacedOn: String
+	groupTask: Boolean
+	customerGeocodeQuality: Int
+	pickupGeocodeQuality: Int
+	routeSequence: Int
+	routeID: String
+}
+
+input DateFilter {
+	fromDate: String!
+	toDate: String!
+	dateField: DateField!
+}
+
+enum DateField {
+	requestedDate
+	plannedDate
+	deliveryDate
+}
+
+type LatLongs @aws_api_key
+@aws_cognito_user_pools {
+    lat: Float
+    long: Float
+}
+
+input locationLatLongs {
+	lat: Float
+	long: Float
+}
+
+type TaskHistory @aws_api_key
+@aws_cognito_user_pools {
+    ID: String
+    tenantID: String
+    taskID: String
+    timestamp: String
+    status: TaskStatus
+    comment: String
+    changedBy: String
+    latLongs: LatLongs
+    location: String
+}
+
+type TaskDetail @aws_api_key
+@aws_cognito_user_pools {
+    qty: Int
+    item: String
+    code: String
+}
+
+input TaskUpdateInput {
+	isDelivery: Boolean
+	taskMode: TaskMode
+	priority: Priority
+	value: Float
+	customerName: String
+	customerEmail: String
+	customerPhone: String
+	customerAddress: String
+	customerLatLongs: locationLatLongs
+	taskDescription: String
+	pickupAddress: String
+	pickupLatLongs: locationLatLongs
+	weight: Float
+	additionalInfo: String
+	taskDetails: [taskDetails]
+	requestedDate: String
+	pickupName: String
+	pickupPhone: String
+	pickupEmail: String
+	orderID: String
+	orderPlacedOn: String
+	groupTask: Boolean
+	customerGeocodeQuality: Int
+	pickupGeocodeQuality: Int
+	routeSequence: Int
+	routeID: String
+}
+
+input TaskCreateInput {
+	TaskTypeID: String
+	isDelivery: Boolean
+	taskMode: TaskMode!
+	priority: Priority!
+	value: Float
+	customerName: String!
+	customerEmail: String
+	customerPhone: String!
+	customerAddress: String!
+	customerLatLongs: locationLatLongs
+	taskDescription: String!
+	AgentID: String
+	TeamID: String!
+	pickupAddress: String
+	pickupLatLongs: locationLatLongs
+	weight: Float
+	additionalInfo: String
+	taskDetails: [taskDetails]
+	allowEdit: Boolean
+	requestedDate: String
+	pickupName: String
+	pickupPhone: String
+	pickupEmail: String
+	orderID: String
+	orderPlacedOn: String
+	groupTask: Boolean
+	invalidLocation: Boolean
+	customerGeocodeQuality: Int
+	pickupGeocodeQuality: Int
+	routeSequence: Int
+	routeID: String
+}
+
+input taskDetails {
+    qty: Int
+    item: String
+    code: String
+}
+
+enum TaskMode {
+    IMMEDIATE
+    SAME_DAY
+    NEXT_DAY
+    APPOINTED
+}
+
+enum Priority {
+    LOW
+    MEDIUM
+    HIGH
+
+}
+
+type TaskType @aws_api_key
+@aws_cognito_user_pools {
+    ID: String
+    name: String
+    isDelivery: Boolean
+	items: [String]
+    createdAt: String
+    updatedAt: String
+    createdBy: String
+    updatedBy: String
+	Messages: [Message]
+}
+
+enum TaskStatus {
+	INVALID_LOCATION
+    NOT_ASSIGNED
+    PENDING_ACCEPTANCE
+    ACCEPTED
+    ASSIGNED
+    IN_TRANSIT
+    ON_SITE
+    COMPLETED
+    PARTIALLY_COMPLETED
+    REJECTED
+    CANCELLED
+    # ACTIVE
+    # COMPLETED
+    FAILED
+}
+
+type TaskConnections @aws_api_key
+@aws_cognito_user_pools {
+    tasks: [Task]
+    count: Int
+}
+
+type Message {
+    ID: String!
+    status: String!
+    TaskType: TaskType
+    language: String!
+    reason: String
+    displayOrderNo: Int!
+    createdAt: String
+    updatedAt: String
+    createdBy: String
+    updatedBy: String
+}

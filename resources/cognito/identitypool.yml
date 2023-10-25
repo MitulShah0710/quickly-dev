@@ -1,0 +1,6 @@
+Type: AWS::Cognito::IdentityPool
+Properties: 
+  AllowUnauthenticatedIdentities: true
+  CognitoIdentityProviders: 
+    - ClientId: !Ref WebClient
+      ProviderName: !Join  ['', ['cognito-idp.', {Ref: "AWS::Region"}, '.amazonaws.com/', !Ref CognitoUserPool ]]

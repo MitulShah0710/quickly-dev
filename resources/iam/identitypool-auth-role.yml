@@ -1,0 +1,71 @@
+Type: AWS::IAM::Role
+Properties:
+  RoleName: !Join ["-",[!Ref AWS::StackName, "IdentityPool-AuthRole"]]
+  AssumeRolePolicyDocument:
+    Version: "2012-10-17"
+    Statement:
+      - Effect: Allow
+        Principal:
+          Federated:
+            - cognito-identity.amazonaws.com
+        Action:
+          - sts:AssumeRoleWithWebIdentity
+        Condition:
+          "StringEquals":
+            "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+          "ForAnyValue:StringLike": 
+            "cognito-identity.amazonaws.com:amr": "authenticated"
+  Policies:
+    - PolicyName: !Join ["-", [ "IdentityPool", { Ref: AWS::StackName }, "Auth", "Policy"]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - "mobileanalytics:PutEvents"
+              - "cognito-sync:*"
+              - "cognito-identity:*"
+              - "mobiletargeting:*"
+            Resource:
+              - "*"
+    - PolicyName: !Join ["-", [ "S3DataBucketPut", { Ref: AWS::StackName }, "Auth", "Policy"]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - "s3:PutObject"
+            Resource:
+              - !Join ['', [!GetAtt S3DataBucket.Arn, '/public/*']]
+    - PolicyName: !Join ["-", [ "S3DataBucketList", { Ref: AWS::StackName }, "Auth", "Policy"]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - "s3:ListBucket"
+            Resource:
+              - !GetAtt S3DataBucket.Arn
+    - PolicyName: !Join ["-", [ "S3DataBucketGet", { Ref: AWS::StackName }, "Auth", "Policy"]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - "s3:GetObject"
+            Resource:
+              - !Join ['', [!GetAtt S3DataBucket.Arn, '/public']]
+              - !Join ['', [!GetAtt S3DataBucket.Arn, '/public/*']]
+    - PolicyName: !Join ["-", [ "ListIdentity", { Ref: AWS::StackName }, "Auth", "Policy"]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - "s3:ListBucket"
+            Resource:
+              - !GetAtt S3DataBucket.Arn
+            Condition: 
+              StringLike:
+                "s3:prefix":
+                  - !Join ["", [ 'public/', '$', '{cognito-identity.amazonaws.com:sub}', '/*']] 

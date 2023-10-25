@@ -1,0 +1,3 @@
+$util.qr($context.stash.put("userId", $context.identity.username ))
+$util.qr($context.stash.put("tenantId", $context.identity.claims.get("custom:TENANT_HASH") ))
+{}

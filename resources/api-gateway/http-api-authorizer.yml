@@ -1,0 +1,11 @@
+Type: AWS::ApiGatewayV2::Authorizer
+Properties:
+  ApiId: !Ref HttpApi
+  AuthorizerType: JWT
+  IdentitySource:
+    - "$request.header.Authorization"
+  JwtConfiguration:
+    Audience:
+      - !Ref WebClient
+    Issuer: !Join ["", ["https://cognito-idp.", { Ref:  AWS::Region }, ".amazonaws.com/", { Ref: CognitoUserPool}]]
+  Name: JwtAuthorizer

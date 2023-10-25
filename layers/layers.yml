@@ -1,0 +1,21 @@
+staticLayer:
+  path: layers/static-layer
+  compatibleRuntimes:
+    - nodejs14.x
+  package:
+    include:
+      - "**/**"
+quicklyCustomLibs:
+  path: layers/quickly-custom-libs
+  compatibleRuntimes:
+    - nodejs12.x
+  package:
+    include:
+      - "**/**"
+quicklyModelLibs:
+  path: layers/quickly-model-libs
+  compatibleRuntimes:
+    - nodejs12.x
+  package:
+    include:
+      - "**/**"

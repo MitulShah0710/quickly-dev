@@ -1,0 +1,10 @@
+#set( $tenant_HASH = $ctx.identity.claims.get("custom:TENANT_HASH"))
+{
+    "version": "2017-02-28",
+    "operation": "Invoke",
+    "payload": {
+        "field": "getLocations",
+        "arguments":  $utils.toJson($context.arguments),
+        "tenantHash": $utils.toJson($tenant_HASH)
+    }
+}

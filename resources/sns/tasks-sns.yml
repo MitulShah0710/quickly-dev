@@ -1,0 +1,3 @@
+Type: AWS::SNS::Topic
+Properties:
+  TopicName: TaskEvents-${opt:stage}

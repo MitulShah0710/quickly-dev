@@ -1,0 +1,5 @@
+## Pass back the result from DynamoDB. **
+#if( !$util.isNull($ctx.error) )
+    $util.error($ctx.error.message)
+#end
+$util.toJson($ctx.result)

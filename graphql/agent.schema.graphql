@@ -1,0 +1,109 @@
+schema {
+    query: Query
+    mutation: Mutation
+    subscription: Subscription
+}
+
+type Query {
+    getAgents(limit: Int, offset: Int): AgentConnection
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin", "TenantWebUser"])
+
+    getAgentsByTeamAndStatus(teamID: String!, status: AgentWorkStatus): AgentConnection
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin", "TenantWebUser"])
+
+    getAgentsTasks(limit: Int, offset: Int, status: TaskStatus): TaskConnections
+    @aws_cognito_user_pools(cognito_groups: ["TenantDriver"])
+
+    getSelfAgentProfile: Agent!
+    @aws_cognito_user_pools(cognito_groups: ["TenantDriver"])
+
+    getTenantAgents(tenantID: String!, teamID: String!, agentStatus: AgentStatus!): [Agent]
+    @aws_api_key
+}
+
+
+type Mutation {
+    createAgent(info: AgentCreateInput): Agent!
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin", "TenantWebUser"])
+
+    updateAgent(agentID: String!, info: AgentUpdateInput ): Agent!
+    @aws_cognito_user_pools(cognito_groups: ["TenantAdmin", "TenantWebUser"])
+
+    updateOwnWorkStatus( newStatus: AgentWorkStatus!, lat: Float!, long: Float!): Agent!
+    @aws_cognito_user_pools(cognito_groups: ["TenantDriver"])
+
+    updateAgentLocation(agentID: String!, tenantID: String!, lat: Float!, long: Float!): Agent!
+    @aws_api_key
+
+    updateEndpoint( deviceToken: String!, isRemove: Boolean ): Boolean!
+    @aws_cognito_user_pools(cognito_groups: ["TenantDriver"])
+}
+
+type Subscription {
+    agentChanges(ID: ID!): Agent
+		@aws_subscribe(mutations: ["createAgent", "updateAgent", "updateOwnWorkStatus", "updateAgentLocation"])
+}
+
+input AgentUpdateInput {
+    firstName: String
+    lastName: String
+    status: AgentStatus
+    TeamID: [String]
+    homeAddress: String
+    homeLatLongs: locationLatLongs
+    latitude: Float
+    longitude: Float
+}
+
+input AgentCreateInput {
+    email: String!
+    firstName: String!
+    lastName: String!
+    TeamID: [String]
+    homeAddress: String
+    homeLatLongs: locationLatLongs
+    latitude: Float
+    longitude: Float
+}
+
+type Agent @aws_api_key
+@aws_cognito_user_pools {
+    ID: ID!
+    email: String!
+    firstName: String!
+    lastName: String!
+    status: AgentStatus
+    workStatus: AgentWorkStatus
+    isVerified: Boolean
+    latitude: Float
+    longitude: Float
+    createdAt: String
+    updatedAt: String
+    createdBy: String
+    updatedBy: String
+    Teams: [Team]
+    activeTaskCount: Int
+    homeAddress: String
+    homeLatLongs: LatLongs
+}
+
+enum AgentStatus {
+    ACTIVE
+    INACTIVE
+}
+
+enum AgentWorkStatus {
+    OFFLINE
+    AVAILABLE
+    ACTIVE
+    INACTIVE
+    WORKING
+}
+
+type AgentConnection @aws_api_key
+@aws_cognito_user_pools {
+    agents: [Agent]
+    total: Int
+    page: Int
+    count: Int
+}

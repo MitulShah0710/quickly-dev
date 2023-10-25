@@ -1,0 +1,69 @@
+schema {
+    query: Query
+    mutation: Mutation
+}
+
+type Query {
+    getLocations(limit: Int, offset: Int, phone: String, name: String): LocationConnection
+    @aws_api_key @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser"  ])
+
+    getLocation(locationId: String!, tenant:String): Location
+    @aws_api_key @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+}
+
+type Mutation {
+    createLocation(info: LocationInput): Location!
+    @aws_api_key @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+
+    updateLocation(locationId: String!, info: LocationUpdateInput): Location!
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+
+    deleteLocation(locationId: String!): Boolean!
+    @aws_cognito_user_pools(cognito_groups: [ "TenantAdmin", "TenantWebUser" ])
+}
+
+input LocationInput {
+    name: String!
+    phone: String!
+    address: String!
+    latLongs: locationLatLongs!
+    email: String
+    type: AddressType
+    subTypes: String
+}
+
+input LocationUpdateInput {
+    name: String
+    phone: String
+    address: String
+    latLongs: locationLatLongs
+    email: String
+    type: AddressType
+    subTypes: String
+}
+
+type Location @aws_api_key
+@aws_cognito_user_pools {
+    ID: ID!
+    name: String
+    phone: String
+    email: String
+    address: String
+    type: AddressType
+    createdBy: String
+    updatedBy: String
+    latLongs: LatLongs
+    subTypes: String
+}
+
+type LocationConnection {
+    locations: [Location]
+    total: Int
+    page: Int
+    count: Int
+}
+
+enum AddressType {
+    H
+    B
+}

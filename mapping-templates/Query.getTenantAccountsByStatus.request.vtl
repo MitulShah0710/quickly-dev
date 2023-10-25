@@ -1,0 +1,21 @@
+{
+    "version" : "2017-02-28",
+    "operation" : "Query",
+    "index": "status-index",
+    "query" : {
+        ## Provide a query expression. **
+        "expression": "#status = :status",
+        "expressionNames" : {
+            "#status" : "status"
+        },
+        "expressionValues" : {
+            ":status" : $util.dynamodb.toDynamoDBJson($ctx.args.status)
+        }
+    }
+    #if( $ctx.args.limit )
+    	,"limit": $util.toJson($ctx.args.limit)
+    #end
+    #if( $ctx.args.nextToken)
+    	,"nextToken": $util.toJson($ctx.args.nextToken)
+    #end
+}

@@ -1,0 +1,152 @@
+  stateMachines:
+    taskAutoAssignmentStateMachine:
+      name: TaskAutoAssignmentStateMachine-${opt:stage}
+      type: EXPRESS
+      loggingConfig:
+        level: ALL
+        includeExecutionData: true
+        destinations:
+          - Fn::GetAtt: [AutoAssignmentStepFunctionLogGroup, Arn]
+
+      events:
+        - http:
+            method: POST
+            path: /task/autoassigment
+            cors: true
+
+      definition:
+        Comment: Auto assign Agent to task
+        StartAt: Initialize Counter
+        States:
+
+          Initialize Counter:
+            Type: Pass
+            Result:
+              attempts: 1
+              notifiedAgents: []
+            ResultPath: $.current
+            Next: Get Agents info
+
+          Get Agents info:
+            Type: Task
+            Resource: !GetAtt getAgentsFunction.Arn
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                IntervalSeconds: 2
+                MaxAttempts: 2
+                BackoffRate: 1
+            Catch:
+              - ErrorEquals:
+                - States.ALL
+                Next: FailToAssign
+            Next: Call GIS model
+            ResultPath: $.agentsData
+
+          Call GIS model:
+            Type: Task
+            Resource: !GetAtt callGisModelFunction.Arn
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                IntervalSeconds: 2
+                MaxAttempts: 5
+                BackoffRate: 2
+            Catch:
+              - ErrorEquals:
+                - States.ALL
+                Next: FailToAssign
+            Next: Any Agent available?
+            ResultSelector:
+              selectedAgents.$: $.selectedAgents
+              numSelectedAgents.$: $.numSelectedAgents
+              notifiedAgents.$: $.notifiedAgents
+              attempts.$: $.attempts
+
+            ResultPath: $.current
+            Comment: Set driving time based on attempts. Must increase attempts at the end
+
+          Any Agent available?:
+            Type: Choice
+            Choices:
+              - Variable: $.current.numSelectedAgents
+                NumericGreaterThan: 0
+                Next: Notify Agents
+            Default: Max Retries?
+
+          Notify Agents:
+            Type: Task
+            Resource: !GetAtt notifyAgentsFunction.Arn
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                IntervalSeconds: 2
+                MaxAttempts: 6
+                BackoffRate: 2
+            Catch:
+              - ErrorEquals:
+                - States.ALL
+                Next: FailToAssign
+            Next: Wait for Agents response
+            ResultSelector:
+              selectedAgents.$: $.selectedAgents
+              numSelectedAgents.$: $.numSelectedAgents
+              notifiedAgents.$: $.notifiedAgents
+              attempts.$: $.attempts
+
+            ResultPath: $.current
+
+          Wait for Agents response:
+            Type: Wait
+            #Seconds: 60
+            SecondsPath: $.config.waitTime
+            Next: Check Task Status
+
+          Check Task Status:
+            Type: Task
+            Resource: !GetAtt checkTaskStatusFunction.Arn
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                IntervalSeconds: 2
+                MaxAttempts: 2
+                BackoffRate: 1
+            Catch:
+              - ErrorEquals:
+                - States.ALL
+                Next: FailToAssign
+            Next: Task Accepted?
+            ResultSelector:
+              result.$: $
+            ResultPath: $.output
+
+          Task Accepted?:
+            Type: Choice
+            Choices:
+              - Variable: $.output.result.taskAssigned
+                BooleanEquals: true
+                Next: SuccessState
+            Default: Max Retries?
+
+          Max Retries?:
+            Type: Choice
+            Choices:
+              - Variable: $.current.attempts
+                NumericLessThan: 5
+                Next: Get Agents info
+            Default: FailToAssign
+
+          FailToAssign:
+            Type: Fail
+            Cause: Could not auto assign
+
+          SuccessState:
+            Type: Succeed
